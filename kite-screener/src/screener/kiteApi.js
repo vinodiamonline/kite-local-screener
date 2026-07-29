@@ -1,7 +1,11 @@
 import { lookupTokenFromScreenerCache, warmScreenerTokenCache } from './screenerTokenCache';
 import { parseInstrumentToken } from './instrumentToken';
 
-const API_URL = '/screener/instruments';
+// Kite moved the screener behind the OMS gateway. The old `/screener/instruments`
+// route now returns 404 "Route not found". The current endpoint lives under
+// `/oms/`, authenticates with the enctoken (like every other OMS call) and pages
+// with `page`/`per_page` instead of `offset`/`limit`.
+const API_URL = '/oms/screener/instruments';
 
 export const TARGET_ROWS_DEFAULT = 500;
 // The screener API only honors a page size up to 100. Any `limit` above 100 is
@@ -104,10 +108,26 @@ async function withScreenerSlot(signal, fn) {
   }
 }
 
-async function fetchScreenerDirect(body, signal) {
-  const csrfToken = readCookie('public_token');
+// The screener body used to be `{ query, order_by, order, limit, offset, tags }`.
+// The OMS screener keeps `query`/`order_by`/`order`/`tags` but pages by 1-based
+// `page` + `per_page`. Callers still pass `limit`/`offset`, so translate here in
+// one place. `offset` always advances in whole `per_page` steps, so the page
+// index divides cleanly.
+function toScreenerBody({ limit, offset, tags, ...rest }) {
+  const perPage = Math.min(Math.max(1, Number(limit) || BATCH_SIZE), BATCH_SIZE);
+  const page = Math.floor((Number(offset) || 0) / perPage) + 1;
+  return {
+    ...rest,
+    tags: Array.isArray(tags) ? tags : [],
+    per_page: perPage,
+    page,
+  };
+}
 
-  if (!csrfToken) {
+async function fetchScreenerDirect(body, signal) {
+  const enctoken = readEnctoken();
+
+  if (!enctoken) {
     throw new Error('Login to Kite first, then open https://kite.zerodha.com/local-screener');
   }
 
@@ -118,12 +138,12 @@ async function fetchScreenerDirect(body, signal) {
     headers: {
       accept: 'application/json, text/plain, */*',
       'content-type': 'application/json',
-      'x-csrftoken': csrfToken,
+      authorization: `enctoken ${enctoken}`,
       'x-kite-userid': getUserId(),
       'x-kite-app-uuid': getAppUuid(),
       'x-kite-version': '3.0.0',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(toScreenerBody(body)),
   });
 
   const text = await response.text();
@@ -537,5 +557,11 @@ function extractRows(payload) {
 }
 
 function extractTotal(payload) {
-  return payload?.data?.count || payload?.count || payload?.total || undefined;
+  return (
+    payload?.data?.total
+    ?? payload?.data?.count
+    ?? payload?.count
+    ?? payload?.total
+    ?? undefined
+  );
 }
