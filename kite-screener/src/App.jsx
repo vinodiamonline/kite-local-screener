@@ -3,6 +3,7 @@ import ChartPanel from './components/ChartPanel';
 import DashboardView from './components/DashboardView';
 import GlobalFilterBar from './components/GlobalFilterBar';
 import MutualFundsView from './components/MutualFundsView';
+import EtfRecommendationsView from './components/EtfRecommendationsView';
 import PositionsView from './components/PositionsView';
 import ScreenerNav from './components/ScreenerNav';
 import ScreenerTable from './components/ScreenerTable';
@@ -65,6 +66,7 @@ import {
   MUTUAL_FUNDS_SCREENER_ID,
   MF_SAVED_SCREENER_ID,
   MF_HOLDINGS_SCREENER_ID,
+  ETF_PICKS_SCREENER_ID,
   SCREENERS,
   makeBookmarksScreener,
   makeHiddenScreener,
@@ -198,6 +200,7 @@ export default function App() {
   const isMfSavedView = activeScreenerId === MF_SAVED_SCREENER_ID;
   const isMfHoldingsView = activeScreenerId === MF_HOLDINGS_SCREENER_ID;
   const isMutualFundsView = isMfScreenerView || isMfSavedView || isMfHoldingsView;
+  const isEtfPicksView = activeScreenerId === ETF_PICKS_SCREENER_ID;
   const isBookmarksView = activeScreenerId === BOOKMARKS_SCREENER_ID;
   const isHiddenView = activeScreenerId === HIDDEN_SCREENER_ID;
   const isWatchlistView = isWatchlistScreenerId(activeScreenerId);
@@ -560,7 +563,7 @@ export default function App() {
       return undefined;
     }
 
-    if (isListView || isDashboardView || isPortfolioView || isMutualFundsView) {
+    if (isListView || isDashboardView || isPortfolioView || isMutualFundsView || isEtfPicksView) {
       setLoading(false);
       setLoadingMore(false);
       setHasMore(false);
@@ -602,7 +605,7 @@ export default function App() {
       });
 
     return () => controller.abort();
-  }, [embedded, isListView, isDashboardView, isPortfolioView, isMutualFundsView, activeScreener, requestBody, marketCapId, limit, refreshKey]);
+  }, [embedded, isListView, isDashboardView, isPortfolioView, isMutualFundsView, isEtfPicksView, activeScreener, requestBody, marketCapId, limit, refreshKey]);
 
   const loadMore = useCallback(() => {
     if (isListView || !embedded || !hasSession() || loading || loadingMore || !hasMore) return;
@@ -872,7 +875,7 @@ export default function App() {
         indexTokensById={indexTokensById}
       />
 
-      <div className={`workspace${isDashboardView ? ' workspace-dashboard' : ''}${isPortfolioView ? ' workspace-portfolio' : ''}${isMutualFundsView ? ' workspace-mf' : ''}`}>
+      <div className={`workspace${isDashboardView ? ' workspace-dashboard' : ''}${isPortfolioView ? ' workspace-portfolio' : ''}${isMutualFundsView ? ' workspace-mf' : ''}${isEtfPicksView ? ' workspace-etf' : ''}`}>
         <ScreenerNav
           bookmarkCount={bookmarks.length}
           hiddenCount={hiddenSymbols.length}
@@ -916,6 +919,13 @@ export default function App() {
             limit={limit}
             refreshKey={refreshKey}
             onRefresh={refreshScreenerData}
+          />
+        ) : isEtfPicksView ? (
+          <EtfRecommendationsView
+            embedded={embedded}
+            selectedRow={selectedRow}
+            selectedRowLive={selectedRowLive}
+            onSelectRow={setSelectedRow}
           />
         ) : isPortfolioView ? (
           <>

@@ -8,6 +8,7 @@ import {
   MUTUAL_FUNDS_SCREENER_ID,
   MF_SAVED_SCREENER_ID,
   MF_HOLDINGS_SCREENER_ID,
+  ETF_PICKS_SCREENER_ID,
 } from '../screener/presets';
 import { SCREENERS } from '../screener/presets';
 import { MAX_WATCHLISTS, watchlistScreenerId } from '../screener/watchlists';
@@ -178,6 +179,23 @@ export default function ScreenerNav({
                 onClick={() => setActiveScreenerId(DASHBOARD_SCREENER_ID)}
               >
                 <span className="wl-item-name">Dashboard</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="nav-section nav-section-compact">
+          <div className="wl-header">
+            <span>ETFs</span>
+          </div>
+          <div className="wl-list wl-list-bookmarks">
+            <div className={`wl-item wl-item-fixed${activeScreenerId === ETF_PICKS_SCREENER_ID ? ' active' : ''}`}>
+              <button
+                type="button"
+                className="wl-item-main"
+                onClick={() => setActiveScreenerId(ETF_PICKS_SCREENER_ID)}
+              >
+                <span className="wl-item-name">ETF Picks</span>
               </button>
             </div>
           </div>
