@@ -3604,11 +3604,11 @@ tr.row-drop-target td {
 }
 
 .mf-holdings-summary {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
-  flex: 1 1 200px;
-  min-width: 180px;
+  flex: 1 1 320px;
+  min-width: 240px;
 }
 
 .mf-holdings-summary-item {
@@ -3623,6 +3623,11 @@ tr.row-drop-target td {
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 4px 14px rgba(16, 24, 40, 0.05);
+}
+
+.mf-xirr-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f7f9fe 100%);
+  border-color: #dbe4f9;
 }
 
 .mf-holdings-summary-item span {

@@ -6,7 +6,8 @@ import {
   computeMfReturns,
   mapWithConcurrency,
 } from '../screener/mfApi';
-import { fetchMfHoldings, hasSession } from '../screener/kiteApi';
+import { fetchMfHoldings, fetchMfOrders, hasSession } from '../screener/kiteApi';
+import { computeHoldingXirr, computePortfolioXirr } from '../screener/xirr';
 import MfNavChart from './MfNavChart';
 import MfCompareModal from './MfCompareModal';
 import MfInsightsModal from './MfInsightsModal';
@@ -81,14 +82,14 @@ function formatNavDate(value) {
 }
 
 const moneyFormatter = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
-const unitFormatter = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 3 });
+const unitFormatter = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
 function formatMoney(value) {
   return Number.isFinite(value) ? `₹${moneyFormatter.format(Math.round(value))}` : '—';
 }
 
 function formatUnits(value) {
-  return Number.isFinite(value) ? unitFormatter.format(value) : '—';
+  return Number.isFinite(value) ? unitFormatter.format(Math.round(value)) : '—';
 }
 
 function formatPct(value) {
@@ -122,6 +123,7 @@ export default function MutualFundsView({
   const [listError, setListError] = useState('');
 
   const [holdings, setHoldings] = useState([]);
+  const [mfOrders, setMfOrders] = useState([]);
   const [holdingsLoading, setHoldingsLoading] = useState(false);
   const [holdingsError, setHoldingsError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -187,9 +189,15 @@ export default function MutualFundsView({
     const controller = new AbortController();
     setHoldingsLoading(true);
     setHoldingsError('');
-    fetchMfHoldings(controller.signal)
-      .then((data) => {
-        if (!controller.signal.aborted) setHoldings(Array.isArray(data) ? data : []);
+    Promise.all([
+      fetchMfHoldings(controller.signal),
+      fetchMfOrders(controller.signal),
+    ])
+      .then(([hData, oData]) => {
+        if (!controller.signal.aborted) {
+          setHoldings(Array.isArray(hData) ? hData : []);
+          setMfOrders(Array.isArray(oData) ? oData : []);
+        }
       })
       .catch((error) => {
         if (!controller.signal.aborted && error?.name !== 'AbortError') {
@@ -296,6 +304,11 @@ export default function MutualFundsView({
       { invested: 0, current: 0, pnl: 0 },
     ),
     [holdingRows],
+  );
+
+  const overallXirr = useMemo(
+    () => computePortfolioXirr(holdingRows, mfOrders, returnsByCode),
+    [holdingRows, mfOrders, returnsByCode],
   );
 
   useEffect(() => {
@@ -414,13 +427,15 @@ export default function MutualFundsView({
     setRefreshing(true);
     setHoldingsError('');
     try {
-      const [schemesData, holdingsData] = await Promise.all([
+      const [schemesData, holdingsData, ordersData] = await Promise.all([
         loadMfSchemes({ force: true }).catch(() => null),
         fetchMfHoldings(),
+        fetchMfOrders(),
       ]);
       if (schemesData) setSchemes(schemesData);
       const list = Array.isArray(holdingsData) ? holdingsData : [];
       setHoldings(list);
+      setMfOrders(Array.isArray(ordersData) ? ordersData : []);
 
       const byIsin = new Map();
       (schemesData || schemes).forEach((scheme) => {
@@ -575,6 +590,12 @@ export default function MutualFundsView({
                     {holdingsSummary.invested > 0 && ` (${formatPct((holdingsSummary.pnl / holdingsSummary.invested) * 100)})`}
                   </strong>
                 </div>
+                <div className="mf-holdings-summary-item mf-xirr-card">
+                  <span>Overall XIRR</span>
+                  <strong className={toneClass(overallXirr)}>
+                    {overallXirr != null ? `${overallXirr > 0 ? '+' : ''}${overallXirr.toFixed(2)}% p.a.` : '—'}
+                  </strong>
+                </div>
               </div>
 
               <MfAllocationPie rows={holdingRows} />
@@ -591,6 +612,7 @@ export default function MutualFundsView({
                   <th className="num-cell">Units</th>
                   <th className="num-cell">Avg NAV</th>
                   <th className="num-cell">NAV</th>
+                  <th className="num-cell">Invested</th>
                   <th className="num-cell">Current</th>
                   <th className="num-cell">P&amp;L</th>
                 </tr>
@@ -598,7 +620,7 @@ export default function MutualFundsView({
               <tbody>
                 {!holdingsLoading && holdingRows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="empty-cell">
+                    <td colSpan={7} className="empty-cell">
                       {holdingsError
                         ? 'Could not load your mutual-fund holdings.'
                         : 'No mutual-fund holdings found in your Zerodha account.'}
@@ -607,7 +629,7 @@ export default function MutualFundsView({
                 )}
                 {holdingsLoading && holdingRows.length === 0 && !holdingsError && (
                   <tr>
-                    <td colSpan={6} className="empty-cell">Loading your holdings…</td>
+                    <td colSpan={7} className="empty-cell">Loading your holdings…</td>
                   </tr>
                 )}
                 {holdingRows.map((row) => {
@@ -642,6 +664,7 @@ export default function MutualFundsView({
                           </small>
                         )}
                       </td>
+                      <td className="num-cell">{formatMoney(row.invested)}</td>
                       <td className="num-cell">{formatMoney(row.current)}</td>
                       <td className={`num-cell ${toneClass(row.pnl)}`}>
                         <span className="mf-holdings-pnl">{formatMoney(row.pnl)}</span>

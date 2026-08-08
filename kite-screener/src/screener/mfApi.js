@@ -208,6 +208,7 @@ export function computeMfReturns(series) {
     rInception: inceptionYears >= 1
       ? cagr(first.nav, latestNav, inceptionYears)
       : absoluteReturn(first.nav, latestNav),
+    series,
   };
 }
 

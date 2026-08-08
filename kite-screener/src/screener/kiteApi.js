@@ -284,6 +284,23 @@ export async function fetchMfHoldings(signal) {
   return payload?.data || [];
 }
 
+// Mutual-fund order history (Coin). Returns list of executed/pending orders.
+export async function fetchMfOrders(signal) {
+  try {
+    const response = await fetch('/oms/mf/orders', {
+      method: 'GET',
+      credentials: 'include',
+      signal,
+      headers: authHeaders(),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload?.status !== 'success') return [];
+    return payload?.data || [];
+  } catch {
+    return [];
+  }
+}
+
 export function buildKiteChartUrl({ exchange = 'NSE', symbol, token }) {
   if (!symbol || !token) return '';
   return `https://kite.zerodha.com/markets/ext/chart/web/tvc/${exchange}/${symbol}/${token}`;
