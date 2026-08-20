@@ -72,13 +72,16 @@ function parseAmfiNav(text) {
       const name = parts[3].trim();
       if (!/^\d+$/.test(schemeCode) || !name) continue;
 
-      const nav = Number.parseFloat(parts[4]);
+      // NAV and Date are always the last two columns. AMFI has, over time,
+      // added columns after the scheme name (e.g. Plan/Option), so read from
+      // the end rather than fixed indices to stay resilient to that layout.
+      const nav = Number.parseFloat(parts[parts.length - 2]);
       schemes.push({
         schemeCode,
         isin: parts[1].trim() || parts[2].trim() || '',
         name,
         nav: Number.isFinite(nav) ? nav : null,
-        navDate: parts[5].trim(),
+        navDate: parts[parts.length - 1].trim(),
         amc,
         schemeType,
         subCategory,
