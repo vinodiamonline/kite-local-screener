@@ -56,13 +56,13 @@ function tickAgeMs(tickTimeSeconds, now = Date.now()) {
  * `errors` block submission; `warnings` require an extra typed confirm.
  *
  * @param {object} order  { variety, product, order_type, transaction_type, quantity, price, trigger_price, validity }
- * @param {object} ctx    { ltp, tickTime, limits }
+ * @param {object} ctx    { ltp, tickTime, receivedAt, limits }
  */
 export function validateOrder(order, ctx = {}) {
   const errors = [];
   const warnings = [];
   const limits = { ...ORDER_LIMITS, ...(ctx.limits || {}) };
-  const { ltp, tickTime } = ctx;
+  const { ltp, tickTime, receivedAt } = ctx;
 
   if (!order || typeof order !== 'object') {
     return { errors: ['No order data.'], warnings: [] };
@@ -107,8 +107,12 @@ export function validateOrder(order, ctx = {}) {
     warnings.push('Could not estimate order value (no live price).');
   }
 
-  // Tick freshness
-  const age = tickAgeMs(tickTime);
+  // Tick freshness. Prefer the client receive time of the last tick (measures
+  // whether the live feed is still flowing, and is immune to clock skew between
+  // this machine and the exchange). Fall back to the exchange tick timestamp
+  // only when no receive time is available.
+  const recv = num(receivedAt);
+  const age = Number.isFinite(recv) && recv > 0 ? Date.now() - recv : tickAgeMs(tickTime);
   if (age > limits.TICK_FRESHNESS_MS) {
     warnings.push(
       Number.isFinite(age)

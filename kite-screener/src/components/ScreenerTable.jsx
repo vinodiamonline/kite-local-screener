@@ -4,6 +4,7 @@ import { bookmarkKey } from '../screener/bookmarks';
 import BookmarkSearch from './BookmarkSearch';import MarketCapTag from './MarketCapTag';
 import ScreenerFilters from './ScreenerFilters';
 import SymbolContextMenu from './SymbolContextMenu';
+import SignalTooltip from './SignalTooltip';
 
 export default function ScreenerTable({
   screener,
@@ -37,6 +38,7 @@ export default function ScreenerTable({
   setLimit,
   hideSectorFilter = false,
   onRefresh,
+  signalsByKey = null,
 }) {
   const columns = screener.columns || DEFAULT_COLUMNS;
   const canReorderRows = Boolean((screener.isBookmarks || screener.isWatchlist) && onReorderRows);
@@ -46,6 +48,7 @@ export default function ScreenerTable({
   const [contextMenu, setContextMenu] = useState(null);
   const [dragFromIndex, setDragFromIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [hoverSignal, setHoverSignal] = useState(null);
 
   // Watchlists/bookmarks support manual drag-reorder, but only while unsorted.
   // Once a sort column is active, we sort and disable dragging.
@@ -154,6 +157,14 @@ export default function ScreenerTable({
         isBookmarked={isBookmarked}
         onToggleBookmark={!isHiddenView ? onToggleBookmark : undefined}
       />
+      {hoverSignal && (
+        <SignalTooltip
+          anchor={hoverSignal.rect}
+          symbol={hoverSignal.symbol}
+          currentPrice={hoverSignal.currentPrice}
+          signal={hoverSignal.signal}
+        />
+      )}
       {!(screener.isWatchlist || screener.isBookmarks) && (
         <div className="panel-title">
           <div>
@@ -280,6 +291,7 @@ export default function ScreenerTable({
               const symbol = getSymbol(row) || `row-${index}`;
               const selected = selectedRow === row || getSymbol(selectedRow) === symbol;
               const change = getChangeValue(row);
+              const signal = signalsByKey?.[bookmarkKey(row)];
 
               return (
                 <tr
@@ -355,7 +367,16 @@ export default function ScreenerTable({
                           )}
                           <span className="symbol-text">
                             <span className="symbol-line">
-                              <span className={`symbol-ticker${getSymbolTone(change)}`}>
+                              <span
+                                className={`symbol-ticker${getSymbolTone(change)}`}
+                                onMouseEnter={signal && !signal.status ? (event) => setHoverSignal({
+                                  rect: event.currentTarget.getBoundingClientRect(),
+                                  symbol: getSymbol(row),
+                                  currentPrice: Number(row?.last_price),
+                                  signal,
+                                }) : undefined}
+                                onMouseLeave={signal && !signal.status ? () => setHoverSignal(null) : undefined}
+                              >
                                 {getSymbol(row)}
                               </span>
                               <MarketCapTag marketCap={row?.market_cap} />

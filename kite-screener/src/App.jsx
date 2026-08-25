@@ -74,6 +74,7 @@ import { loadSavedFunds, saveSavedFunds, isFundSaved as isFundSavedInList, toggl
 import { filterHoldings, normalizeHolding, normalizePosition } from './screener/positions';
 import { buildRequestBody } from './screener/queryBuilder';
 import { mergeLiveTickRow } from './screener/liveTick';
+import { useBookmarkSignals } from './screener/signals/useBookmarkSignals';
 import { INDEX_SHORTCUTS } from './screener/indexShortcuts';
 import { KiteTicker, requestEnctoken } from './screener/kiteTicker';
 import {
@@ -439,8 +440,11 @@ export default function App() {
 
   const handleTicks = useCallback((ticks) => {
     const buffer = tickBufferRef.current;
+    const recvAt = Date.now();
     ticks.forEach((tick) => {
-      buffer.set(tick.instrument_token, tick);
+      // Stamp the client receive time so order-safety can judge feed freshness
+      // without depending on the exchange clock (immune to local clock skew).
+      buffer.set(tick.instrument_token, { ...tick, _recvAt: recvAt });
     });
   }, []);
 
@@ -476,6 +480,15 @@ export default function App() {
 
   const displayLoading = isListView ? quotesLoading && listRows.length === 0 : loading;
   const displayTotal = isListView ? listRows.length : total;
+
+  // Buy/Sell/Hold signals for the All Bookmarks view (computed from ~2y daily
+  // candles + a weighted technical-score engine).
+  const { signals: bookmarkSignals } = useBookmarkSignals(
+    activeListItems,
+    { enabled: embedded && isBookmarksView, refreshKey: quoteRefreshKey },
+  );
+
+  const finalDisplayRows = displayRows;
 
   const visibleTokens = useMemo(() => {
     const set = new Set();
@@ -934,7 +947,7 @@ export default function App() {
           <>
             <ScreenerTable
               screener={activeScreener}
-              rows={displayRows}
+              rows={finalDisplayRows}
               total={displayTotal}
               loading={displayLoading}
               loadingMore={loadingMore}
@@ -953,12 +966,11 @@ export default function App() {
               isInActiveList={isInActiveList}
               isHiddenView={isHiddenView}
               onReorderRows={
-                isBookmarksView
-                  ? reorderBookmarkRows
-                  : isWatchlistView
-                    ? reorderWatchlistRows
-                    : undefined
+                isWatchlistView
+                  ? reorderWatchlistRows
+                  : undefined
               }
+              signalsByKey={isBookmarksView ? bookmarkSignals : null}
               liveQuotes={isListView}
               quotesLoading={quotesLoading}
               showFilters={!isListView}

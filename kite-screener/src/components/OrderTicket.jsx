@@ -54,6 +54,9 @@ function ltpOf(row) {
 function tickTimeOf(row) {
   return Number(row?.last_trade_time ?? row?.timestamp) || 0;
 }
+function tickReceivedAtOf(row) {
+  return Number(row?._tickReceivedAt) || 0;
+}
 
 function formatMoney(value) {
   if (!Number.isFinite(value)) return '—';
@@ -74,6 +77,7 @@ export default function OrderTicket({ symbol, exchange, token, row, onClose }) {
 
   const ltp = ltpOf(row);
   const tickTime = tickTimeOf(row);
+  const tickReceivedAt = tickReceivedAtOf(row);
 
   useEffect(() => {
     writeOrderPrefs({ side, product, orderType });
@@ -116,8 +120,8 @@ export default function OrderTicket({ symbol, exchange, token, row, onClose }) {
   );
 
   const { errors, warnings } = useMemo(
-    () => validateOrder(draft, { ltp, tickTime }),
-    [draft, ltp, tickTime],
+    () => validateOrder(draft, { ltp, tickTime, receivedAt: tickReceivedAt }),
+    [draft, ltp, tickTime, tickReceivedAt],
   );
 
   const orderValue = useMemo(() => {
@@ -174,6 +178,7 @@ export default function OrderTicket({ symbol, exchange, token, row, onClose }) {
     const response = await placeOrder(draft, {
       ltp,
       tickTime,
+      receivedAt: tickReceivedAt,
       allowWarnings: pendingConfirm,
     });
     setPlacing(false);

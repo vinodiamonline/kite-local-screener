@@ -23,6 +23,7 @@ export function mergeLiveTickRow(row, tick) {
   if (Number.isFinite(tick.average_price)) next.average_price = tick.average_price;
   if (Number.isFinite(tick.last_quantity)) next.last_quantity = tick.last_quantity;
   if (tick.timestamp) next.last_trade_time = tick.timestamp;
+  if (Number.isFinite(tick._recvAt)) next._tickReceivedAt = tick._recvAt;
   if (tick.depth) next.depth = tick.depth;
 
   return next;

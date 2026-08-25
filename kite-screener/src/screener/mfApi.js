@@ -42,13 +42,15 @@ function parseCategoryHeader(line) {
   return { schemeType: schemeType || 'Other', subCategory: subCategory || 'Other', category: inner };
 }
 
-function detectPlan(name) {
-  return /\bdirect\b/i.test(name) ? 'Direct' : 'Regular';
+function detectPlan(name, planCol) {
+  const src = `${planCol || ''} ${name}`;
+  return /\bdirect\b/i.test(src) ? 'Direct' : 'Regular';
 }
 
-function detectOption(name) {
-  if (/\b(idcw|dividend|payout|reinvest)\b/i.test(name)) return 'IDCW';
-  if (/\bgrowth\b/i.test(name)) return 'Growth';
+function detectOption(name, optionCol) {
+  const src = `${optionCol || ''} ${name}`;
+  if (/\b(idcw|dividend|payout|reinvest|dcw)\b/i.test(src)) return 'IDCW';
+  if (/\bgrowth\b/i.test(src)) return 'Growth';
   return 'Other';
 }
 
@@ -73,9 +75,13 @@ function parseAmfiNav(text) {
       if (!/^\d+$/.test(schemeCode) || !name) continue;
 
       // NAV and Date are always the last two columns. AMFI has, over time,
-      // added columns after the scheme name (e.g. Plan/Option), so read from
+      // added columns after the scheme name (Plan, then Option), so read from
       // the end rather than fixed indices to stay resilient to that layout.
+      // When present, the dedicated Plan/Option columns (immediately before
+      // NAV/Date) are used; otherwise we fall back to parsing the scheme name.
       const nav = Number.parseFloat(parts[parts.length - 2]);
+      const planCol = parts.length >= 8 ? parts[parts.length - 4].trim() : '';
+      const optionCol = parts.length >= 8 ? parts[parts.length - 3].trim() : '';
       schemes.push({
         schemeCode,
         isin: parts[1].trim() || parts[2].trim() || '',
@@ -86,8 +92,8 @@ function parseAmfiNav(text) {
         schemeType,
         subCategory,
         category,
-        plan: detectPlan(name),
-        option: detectOption(name),
+        plan: detectPlan(name, planCol),
+        option: detectOption(name, optionCol),
       });
       continue;
     }

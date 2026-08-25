@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchHoldings, fetchPositions, hasSession } from '../screener/kiteApi';
-import { hasValidInstrumentToken } from '../screener/bookmarks';
+import { bookmarkKey, hasValidInstrumentToken } from '../screener/bookmarks';
+import SignalTooltip from './SignalTooltip';
+import { useBookmarkSignals } from '../screener/signals/useBookmarkSignals';
 import {
   applyTickToHolding,
   applyTickToPosition,
@@ -172,6 +174,10 @@ export default function PositionsView({
   const { open, closed } = useMemo(() => splitPositions(livePositions), [livePositions]);
 
   const visibleRows = isHoldings ? liveHoldings : livePositions;
+  const { signals: holdingSignals } = useBookmarkSignals(
+    holdings,
+    { enabled: embedded && isHoldings, refreshKey: localRefresh },
+  );
 
   useEffect(() => {
     tokensCallbackRef.current?.(collectTokens(visibleRows));
@@ -286,6 +292,7 @@ export default function PositionsView({
           kind="holding"
           selectedRow={selectedRow}
           onSelectRow={onSelectRow}
+          signalsByKey={holdingSignals}
         />
       )}
     </main>
@@ -299,10 +306,12 @@ function PortfolioTable({
   selectedRow,
   onSelectRow,
   closed = false,
+  signalsByKey = null,
 }) {
   const groupPnl = sumPnl(rows);
   const isHolding = kind === 'holding';
   const [sort, setSort] = useState({ key: 'pnl', direction: 'desc' });
+  const [hoverSignal, setHoverSignal] = useState(null);
 
   const columns = useMemo(
     () => (isHolding ? HOLDING_COLUMNS : POSITION_COLUMNS),
@@ -329,6 +338,14 @@ function PortfolioTable({
 
   return (
     <section className={`positions-section${closed ? ' positions-section-closed' : ''}`}>
+      {hoverSignal && (
+        <SignalTooltip
+          anchor={hoverSignal.rect}
+          symbol={hoverSignal.symbol}
+          currentPrice={hoverSignal.currentPrice}
+          signal={hoverSignal.signal}
+        />
+      )}
       <div className="positions-section-head">
         <h3>{title}</h3>
         <span className={`positions-section-pnl ${toneClass(groupPnl)}`}>{fmtMoney(groupPnl)}</span>
@@ -373,7 +390,7 @@ function PortfolioTable({
                       key={column.key}
                       className={getPortfolioCellClass(column, row, isHolding)}
                     >
-                      {renderPortfolioCell(row, column, isHolding)}
+                      {renderPortfolioCell(row, column, isHolding, signalsByKey, setHoverSignal)}
                     </td>
                   ))}
                 </tr>
@@ -440,15 +457,27 @@ function getPortfolioCellClass(column, row, isHolding) {
   return classes.join(' ');
 }
 
-function renderPortfolioCell(row, column, isHolding) {
+function renderPortfolioCell(row, column, isHolding, signalsByKey, setHoverSignal) {
   if (column.key === 'tradingsymbol') {
     const qty = isHolding ? row.holding_quantity : row.quantity;
+    const signal = signalsByKey?.[bookmarkKey(row)];
     return (
       <span className="positions-symbol">
         <span className={`positions-qty-dot ${
           qty > 0 ? 'long' : qty < 0 ? 'short' : 'flat'
         }`} />
-        <span className="positions-ticker">{row.tradingsymbol}</span>
+        <span
+          className="positions-ticker"
+          onMouseEnter={signal && !signal.status ? (event) => setHoverSignal({
+            rect: event.currentTarget.getBoundingClientRect(),
+            symbol: row.tradingsymbol,
+            currentPrice: Number(row.last_price),
+            signal,
+          }) : undefined}
+          onMouseLeave={signal && !signal.status ? () => setHoverSignal(null) : undefined}
+        >
+          {row.tradingsymbol}
+        </span>
         <span className="positions-exchange">{row.exchange}</span>
         {isHolding && row.collateral_quantity > 0 && (
           <span className="positions-badge positions-badge-pledge" title="Pledged as collateral">

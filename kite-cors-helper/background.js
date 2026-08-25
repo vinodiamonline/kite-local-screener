@@ -81,6 +81,19 @@ function isLocalScreenerUrl(urlString) {
 
 
 
+// During an extension reload or tab close, chrome.scripting/tabs calls can
+// reject because the target tab no longer exists. These are expected and noisy,
+// so callers use this to swallow them instead of surfacing an uncaught error.
+function isTabGoneError(error) {
+
+  const msg = error && error.message ? error.message : '';
+
+  return /No tab with id|The tab was closed|No frame with id|Frame with ID|No window with id|Cannot access/i.test(msg);
+
+}
+
+
+
 async function injectLocalScreener(tabId) {
 
   if (!(await isEnabled())) return;
@@ -204,7 +217,7 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
 
   } catch (error) {
 
-    console.error('Failed to inject local screener', error);
+    if (!isTabGoneError(error)) console.error('Failed to inject local screener', error);
 
   }
 
@@ -215,6 +228,8 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   (async () => {
+
+    try {
 
     if (message.type === 'openLocalScreener') {
 
@@ -327,6 +342,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     sendResponse({ ok: false, error: 'Unknown message type' });
+
+    } catch (error) {
+
+      if (!isTabGoneError(error)) console.error('Local screener background message handler failed', error);
+
+      try { sendResponse({ ok: false, error: (error && error.message) || 'Background handler error' }); } catch (_e) { /* message channel already closed */ }
+
+    }
 
   })();
 
