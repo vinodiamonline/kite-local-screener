@@ -6,6 +6,7 @@ import MutualFundsView from './components/MutualFundsView';
 import PositionsView from './components/PositionsView';
 import ScreenerNav from './components/ScreenerNav';
 import ScreenerTable from './components/ScreenerTable';
+import SymbolNoteEditor from './components/SymbolNoteEditor';
 import {
   BATCH_SIZE,
   TARGET_ROWS_DEFAULT,
@@ -481,12 +482,26 @@ export default function App() {
   const displayLoading = isListView ? quotesLoading && listRows.length === 0 : loading;
   const displayTotal = isListView ? listRows.length : total;
 
-  // Buy/Sell/Hold signals for the All Bookmarks view (computed from ~2y daily
-  // candles + a weighted technical-score engine).
-  const { signals: bookmarkSignals } = useBookmarkSignals(
+  // Buy/Sell/Hold signals (computed from ~2y daily candles + a weighted
+  // technical-score engine; cached per instrument for 6h). Bookmarks compute
+  // automatically; watchlists can be large, so they only show cached results
+  // until the user clicks "Analyze signals", which fetches the missing ones.
+  const [signalScanListId, setSignalScanListId] = useState(null);
+  const signalsEnabled = embedded && (isBookmarksView || isWatchlistView);
+  const watchlistScanActive = isWatchlistView && signalScanListId === activeWatchlistId;
+  const {
+    signals: bookmarkSignals,
+    loading: signalsLoading,
+    progress: signalsProgress,
+  } = useBookmarkSignals(
     activeListItems,
-    { enabled: embedded && isBookmarksView, refreshKey: quoteRefreshKey },
+    isWatchlistView
+      ? { enabled: signalsEnabled, fetchMissing: watchlistScanActive, concurrency: 2 }
+      : { enabled: signalsEnabled, refreshKey: quoteRefreshKey },
   );
+  const analyzeWatchlistSignals = useCallback(() => {
+    setSignalScanListId(activeWatchlistId);
+  }, [activeWatchlistId]);
 
   const finalDisplayRows = displayRows;
 
@@ -880,6 +895,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <SymbolNoteEditor />
       <GlobalFilterBar
         indexLiveTicks={liveTicks}
         indexTokensById={indexTokensById}
@@ -970,7 +986,10 @@ export default function App() {
                   ? reorderWatchlistRows
                   : undefined
               }
-              signalsByKey={isBookmarksView ? bookmarkSignals : null}
+              signalsByKey={signalsEnabled ? bookmarkSignals : null}
+              onAnalyzeSignals={isWatchlistView && embedded ? analyzeWatchlistSignals : undefined}
+              signalsLoading={signalsLoading}
+              signalsProgress={signalsProgress}
               liveQuotes={isListView}
               quotesLoading={quotesLoading}
               showFilters={!isListView}

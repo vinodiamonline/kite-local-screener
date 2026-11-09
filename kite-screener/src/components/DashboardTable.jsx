@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import MarketCapTag from './MarketCapTag';
 import SymbolContextMenu from './SymbolContextMenu';
+import SignalTooltip from './SignalTooltip';
 import { getSymbol, getCompanyName } from './ScreenerTable';
+import { getSymbolNote, useSymbolNotes } from '../screener/symbolNotes';
 
 function sepKey(label) {
   return String(label || '').trim().toLowerCase();
@@ -61,6 +63,8 @@ export default function DashboardTable({
 }) {
   const [sort, setSort] = useState({ key: null, direction: 'desc' });
   const [contextMenu, setContextMenu] = useState(null);
+  const [hoverNote, setHoverNote] = useState(null);
+  useSymbolNotes();
   const scrollRef = useRef(null);
   const sepRefs = useRef({});
 
@@ -135,6 +139,13 @@ export default function DashboardTable({
         isBookmarked={isBookmarked}
         onToggleBookmark={onToggleBookmark}
       />
+      {hoverNote && (
+        <SignalTooltip
+          anchor={hoverNote.rect}
+          symbol={hoverNote.symbol}
+          note={getSymbolNote(hoverNote.symbol)}
+        />
+      )}
       <header className="dash-table-head">
         <div className="dash-table-title">
           <span>{title}</span>
@@ -219,6 +230,7 @@ export default function DashboardTable({
                 && (selectedRow.exchange || '') === (row.exchange || '');
               const change = Number(row?.change_percent ?? row?.change);
               const tone = toneClass(change);
+              const note = getSymbolNote(row);
 
               return (
                 <tr
@@ -226,7 +238,6 @@ export default function DashboardTable({
                   className={selected ? 'selected-row' : ''}
                   onClick={() => onSelectRow?.(row)}
                   onContextMenu={(event) => {
-                    if (!onHideSymbol && !onToggleBookmark) return;
                     event.preventDefault();
                     setContextMenu({ x: event.clientX, y: event.clientY, row });
                   }}
@@ -246,9 +257,17 @@ export default function DashboardTable({
                       </button>
                       <span className="symbol-text">
                         <span className="symbol-line">
-                          <span className={`symbol-ticker${tone === 'cell-up' ? ' up' : tone === 'cell-down' ? ' down' : ''}`}>
+                          <span
+                            className={`symbol-ticker${tone === 'cell-up' ? ' up' : tone === 'cell-down' ? ' down' : ''}`}
+                            onMouseEnter={note ? (event) => setHoverNote({
+                              rect: event.currentTarget.getBoundingClientRect(),
+                              symbol: getSymbol(row),
+                            }) : undefined}
+                            onMouseLeave={note ? () => setHoverNote(null) : undefined}
+                          >
                             {getSymbol(row)}
                           </span>
+                          {note && <span className="symbol-note-mark" aria-label="Has note">✎</span>}
                           {showCapTag && <MarketCapTag marketCap={row?.market_cap} />}
                         </span>
                         {getCompanyName(row) && (

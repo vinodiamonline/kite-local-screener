@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { getSymbol } from './ScreenerTable';
+import { getSymbolNote, openNoteEditor } from '../screener/symbolNotes';
 
 export default function SymbolContextMenu({
   menu,
@@ -46,6 +47,11 @@ export default function SymbolContextMenu({
   };
 
   const items = [];
+  items.push({
+    id: 'note',
+    label: getSymbolNote(menu.row) ? 'Edit note' : 'Add note',
+    action: () => run(openNoteEditor),
+  });
   if (onUnhideSymbol) {
     items.push({ id: 'unhide', label: 'Unhide symbol', action: () => run(onUnhideSymbol) });
   } else if (onHideSymbol) {

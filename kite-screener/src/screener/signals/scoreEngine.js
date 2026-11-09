@@ -91,33 +91,54 @@ function categoryFor(score) {
   return 'hold';
 }
 
+// Pick the closest candidate level and remember where it came from, then keep
+// it within a sane ATR-based distance (falling back to a volatility estimate).
+function pickLevel(candidates, { price, atrV, above }) {
+  const valid = candidates.filter(({ value }) => value != null && (above ? value > price : value < price));
+  let best = valid.length
+    ? valid.reduce((a, b) => (above ? (b.value < a.value ? b : a) : (b.value > a.value ? b : a)))
+    : { value: price + (above ? 3 : -3) * atrV, source: 'volatility' };
+  const far = price + (above ? 8 : -8) * atrV;
+  const near = price + (above ? 0.5 : -0.5) * atrV;
+  const clamped = above
+    ? Math.max(Math.min(best.value, far), near)
+    : Math.min(Math.max(best.value, far), near);
+  if (clamped !== best.value) best = { value: clamped, source: 'volatility' };
+  return best;
+}
+
 function deriveLevels({ price, ind }) {
   const atrV = last(ind.atr) || price * 0.02;
   const { nearestResistance, nearestSupport, swingHigh, swingLow } = ind.sr;
-  const bollUpper = last(ind.boll.upper);
-  const bollLower = last(ind.boll.lower);
 
   // Buy cap: closest meaningful ceiling above price.
-  const ceilings = [nearestResistance, bollUpper, swingHigh]
-    .filter((v) => v != null && v > price);
-  let buyCap = ceilings.length ? Math.min(...ceilings) : price + atrV * 3;
-  buyCap = Math.min(buyCap, price + atrV * 8);
-  buyCap = Math.max(buyCap, price + atrV * 0.5);
+  const cap = pickLevel([
+    { value: nearestResistance, source: 'resistance' },
+    { value: last(ind.boll.upper), source: 'upper-band' },
+    { value: swingHigh, source: 'recent-high' },
+  ], { price, atrV, above: true });
 
   // Sell floor: closest meaningful support below price.
-  const floors = [nearestSupport, bollLower, swingLow]
-    .filter((v) => v != null && v < price);
-  let sellFloor = floors.length ? Math.max(...floors) : price - atrV * 3;
-  sellFloor = Math.max(sellFloor, price - atrV * 8);
-  sellFloor = Math.min(sellFloor, price - atrV * 0.5);
+  const floor = pickLevel([
+    { value: nearestSupport, source: 'support' },
+    { value: last(ind.boll.lower), source: 'lower-band' },
+    { value: swingLow, source: 'recent-low' },
+  ], { price, atrV, above: false });
+
+  const hasSupport = nearestSupport != null && nearestSupport < price;
+  const hasResistance = nearestResistance != null && nearestResistance > price;
 
   return {
     price,
     atr: atrV,
-    buyCap,
-    sellFloor,
-    holdLow: nearestSupport != null && nearestSupport < price ? nearestSupport : sellFloor,
-    holdHigh: nearestResistance != null && nearestResistance > price ? nearestResistance : buyCap,
+    buyCap: cap.value,
+    buyCapSource: cap.source,
+    sellFloor: floor.value,
+    sellFloorSource: floor.source,
+    holdLow: hasSupport ? nearestSupport : floor.value,
+    holdLowSource: hasSupport ? 'support' : floor.source,
+    holdHigh: hasResistance ? nearestResistance : cap.value,
+    holdHighSource: hasResistance ? 'resistance' : cap.source,
   };
 }
 

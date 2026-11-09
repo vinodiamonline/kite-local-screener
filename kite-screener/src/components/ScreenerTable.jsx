@@ -4,7 +4,8 @@ import { bookmarkKey } from '../screener/bookmarks';
 import BookmarkSearch from './BookmarkSearch';import MarketCapTag from './MarketCapTag';
 import ScreenerFilters from './ScreenerFilters';
 import SymbolContextMenu from './SymbolContextMenu';
-import SignalTooltip from './SignalTooltip';
+import SignalTooltip, { hasSignal } from './SignalTooltip';
+import { getSymbolNote, useSymbolNotes } from '../screener/symbolNotes';
 
 export default function ScreenerTable({
   screener,
@@ -39,6 +40,9 @@ export default function ScreenerTable({
   hideSectorFilter = false,
   onRefresh,
   signalsByKey = null,
+  onAnalyzeSignals,
+  signalsLoading = false,
+  signalsProgress,
 }) {
   const columns = screener.columns || DEFAULT_COLUMNS;
   const canReorderRows = Boolean((screener.isBookmarks || screener.isWatchlist) && onReorderRows);
@@ -49,6 +53,7 @@ export default function ScreenerTable({
   const [dragFromIndex, setDragFromIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [hoverSignal, setHoverSignal] = useState(null);
+  useSymbolNotes();
 
   // Watchlists/bookmarks support manual drag-reorder, but only while unsorted.
   // Once a sort column is active, we sort and disable dragging.
@@ -163,6 +168,7 @@ export default function ScreenerTable({
           symbol={hoverSignal.symbol}
           currentPrice={hoverSignal.currentPrice}
           signal={hoverSignal.signal}
+          note={getSymbolNote(hoverSignal.symbol)}
         />
       )}
       {!(screener.isWatchlist || screener.isBookmarks) && (
@@ -212,6 +218,35 @@ export default function ScreenerTable({
               onGoTo={goToSavedItem}
               isBookmarked={isInActiveList}
             />
+          )}
+          {onAnalyzeSignals && (
+            <button
+              type="button"
+              className={`table-refresh-btn table-analyze-btn${signalsLoading ? ' is-busy' : ''}`}
+              onClick={onAnalyzeSignals}
+              disabled={signalsLoading}
+              title={signalsLoading
+                ? `Analyzing signals ${signalsProgress?.done ?? 0}/${signalsProgress?.total ?? 0}…`
+                : 'Analyze Buy / Sell signals (fetches only symbols not analyzed in the last 6h)'}
+              aria-label="Analyze signals"
+            >
+              {signalsLoading && signalsProgress?.total ? (
+                <span className="table-analyze-pct">
+                  {Math.floor((signalsProgress.done / signalsProgress.total) * 100)}%
+                </span>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M1 9h3l2-5 3 9 2-6 1.5 2H15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </button>
           )}
           {onRefresh && (
             <button
@@ -292,6 +327,8 @@ export default function ScreenerTable({
               const selected = selectedRow === row || getSymbol(selectedRow) === symbol;
               const change = getChangeValue(row);
               const signal = signalsByKey?.[bookmarkKey(row)];
+              const note = getSymbolNote(row);
+              const hasHoverCard = hasSignal(signal) || Boolean(note);
 
               return (
                 <tr
@@ -319,7 +356,6 @@ export default function ScreenerTable({
                     setDragOverIndex(null);
                   }}
                   onContextMenu={(event) => {
-                    if (!onHideSymbol && !onUnhideSymbol && !onToggleBookmark && !onRemoveFromWatchlist) return;
                     event.preventDefault();
                     setContextMenu({ x: event.clientX, y: event.clientY, row });
                   }}
@@ -369,16 +405,22 @@ export default function ScreenerTable({
                             <span className="symbol-line">
                               <span
                                 className={`symbol-ticker${getSymbolTone(change)}`}
-                                onMouseEnter={signal && !signal.status ? (event) => setHoverSignal({
+                                onMouseEnter={hasHoverCard ? (event) => setHoverSignal({
                                   rect: event.currentTarget.getBoundingClientRect(),
                                   symbol: getSymbol(row),
                                   currentPrice: Number(row?.last_price),
                                   signal,
                                 }) : undefined}
-                                onMouseLeave={signal && !signal.status ? () => setHoverSignal(null) : undefined}
+                                onMouseLeave={hasHoverCard ? () => setHoverSignal(null) : undefined}
                               >
                                 {getSymbol(row)}
                               </span>
+                              {note && <span className="symbol-note-mark" aria-label="Has note">✎</span>}
+                              {hasSignal(signal) && signal.category !== 'hold' && (
+                                <span className={`signal-tag signal-${signal.category}`}>
+                                  {signal.category === 'strong-buy' ? 'STRONG BUY' : signal.category.toUpperCase()}
+                                </span>
+                              )}
                               <MarketCapTag marketCap={row?.market_cap} />
                             </span>
                             {getCompanyName(row) && (

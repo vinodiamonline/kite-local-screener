@@ -6,8 +6,7 @@ import {
   computeMfReturns,
   mapWithConcurrency,
 } from '../screener/mfApi';
-import { fetchMfHoldings, fetchMfOrders, hasSession } from '../screener/kiteApi';
-import { computeHoldingXirr, computePortfolioXirr } from '../screener/xirr';
+import { fetchMfHoldings, hasSession } from '../screener/kiteApi';
 import MfNavChart from './MfNavChart';
 import MfCompareModal from './MfCompareModal';
 import MfInsightsModal from './MfInsightsModal';
@@ -131,7 +130,6 @@ export default function MutualFundsView({
   const [listError, setListError] = useState('');
 
   const [holdings, setHoldings] = useState([]);
-  const [mfOrders, setMfOrders] = useState([]);
   const [holdingsLoading, setHoldingsLoading] = useState(false);
   const [holdingsError, setHoldingsError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -197,14 +195,10 @@ export default function MutualFundsView({
     const controller = new AbortController();
     setHoldingsLoading(true);
     setHoldingsError('');
-    Promise.all([
-      fetchMfHoldings(controller.signal),
-      fetchMfOrders(controller.signal),
-    ])
-      .then(([hData, oData]) => {
+    fetchMfHoldings(controller.signal)
+      .then((hData) => {
         if (!controller.signal.aborted) {
           setHoldings(Array.isArray(hData) ? hData : []);
-          setMfOrders(Array.isArray(oData) ? oData : []);
         }
       })
       .catch((error) => {
@@ -330,11 +324,6 @@ export default function MutualFundsView({
     [holdingRows],
   );
 
-  const overallXirr = useMemo(
-    () => computePortfolioXirr(holdingRows, mfOrders, returnsByCode),
-    [holdingRows, mfOrders, returnsByCode],
-  );
-
   useEffect(() => {
     if (isHoldingsMode) onHoldingsCount?.(holdingRows.length);
   }, [isHoldingsMode, holdingRows.length, onHoldingsCount]);
@@ -451,15 +440,13 @@ export default function MutualFundsView({
     setRefreshing(true);
     setHoldingsError('');
     try {
-      const [schemesData, holdingsData, ordersData] = await Promise.all([
+      const [schemesData, holdingsData] = await Promise.all([
         loadMfSchemes({ force: true }).catch(() => null),
         fetchMfHoldings(),
-        fetchMfOrders(),
       ]);
       if (schemesData) setSchemes(schemesData);
       const list = Array.isArray(holdingsData) ? holdingsData : [];
       setHoldings(list);
-      setMfOrders(Array.isArray(ordersData) ? ordersData : []);
 
       const byIsin = new Map();
       (schemesData || schemes).forEach((scheme) => {
@@ -612,12 +599,6 @@ export default function MutualFundsView({
                   <strong className={toneClass(holdingsSummary.pnl)}>
                     {formatMoney(holdingsSummary.pnl)}
                     {holdingsSummary.invested > 0 && ` (${formatPct((holdingsSummary.pnl / holdingsSummary.invested) * 100)})`}
-                  </strong>
-                </div>
-                <div className="mf-holdings-summary-item mf-xirr-card">
-                  <span>Overall XIRR</span>
-                  <strong className={toneClass(overallXirr)}>
-                    {overallXirr != null ? `${overallXirr > 0 ? '+' : ''}${overallXirr.toFixed(2)}% p.a.` : '—'}
                   </strong>
                 </div>
               </div>
