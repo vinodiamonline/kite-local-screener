@@ -98,6 +98,14 @@ function formatPct(value) {
   return `${sign}${value.toFixed(2)}%`;
 }
 
+function firstPositiveNumber(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number) && number > 0) return number;
+  }
+  return 0;
+}
+
 function toneClass(value) {
   if (value == null || !Number.isFinite(value) || value === 0) return '';
   return value > 0 ? 'cell-up' : 'cell-down';
@@ -222,8 +230,24 @@ export default function MutualFundsView({
         const isin = String(holding.tradingsymbol || '').trim();
         const matched = schemesByIsin.get(isin) || null;
         const code = matched?.schemeCode || null;
-        const units = Number(holding.quantity) || 0;
-        const avg = Number(holding.average_price) || 0;
+        const units = firstPositiveNumber(holding.quantity, holding.holding_quantity);
+        // Coin normally provides average_price. Some holdings instead expose
+        // their cost basis as a total amount, so derive the average NAV rather
+        // than displaying a misleading zero for both values.
+        const reportedInvested = firstPositiveNumber(
+          holding.amount,
+          holding.amount_invested,
+          holding.invested_amount,
+          holding.invested,
+          holding.purchase_amount,
+          holding.cost_basis,
+        );
+        const reportedAvg = firstPositiveNumber(
+          holding.average_price,
+          holding.average_nav,
+          holding.average_nav_price,
+        );
+        const avg = reportedAvg || (units > 0 ? reportedInvested / units : 0);
         const kiteLtp = Number(holding.last_price) || 0;
 
         const ret = code ? returnsByCode[code] : null;
@@ -253,7 +277,7 @@ export default function MutualFundsView({
         const usingFreshNav = navSource !== 'kite';
         const navDate = best ? formatNavDate(best.dateRaw) : '';
 
-        const invested = units * avg;
+        const invested = reportedInvested || units * avg;
         const current = units * ltp;
         // When we override the NAV, Kite's pnl no longer matches, so recompute it
         // from the fresh price. Only trust Kite's pnl if we kept Kite's price.
