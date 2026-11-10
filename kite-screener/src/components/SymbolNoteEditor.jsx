@@ -42,7 +42,7 @@ export default function SymbolNoteEditor() {
       className="note-editor-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={`Note for ${symbol}`}
+      aria-label={`Note for ${editing.label || symbol}`}
       onKeyDown={(event) => {
         if (event.key === 'Escape') closeNoteEditor();
         if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) save();
@@ -51,7 +51,7 @@ export default function SymbolNoteEditor() {
       <div className="note-editor-backdrop" onClick={closeNoteEditor} />
       <div className="note-editor-panel">
         <div className="note-editor-head">
-          <span className="note-editor-title">Note · {symbol}</span>
+          <span className="note-editor-title">Note · {editing.label || symbol}</span>
           <button type="button" className="note-editor-close" onClick={closeNoteEditor} aria-label="Close">×</button>
         </div>
         <textarea
@@ -59,7 +59,7 @@ export default function SymbolNoteEditor() {
           className="note-editor-input"
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder="Write a note for this stock…"
+          placeholder="Write a note…"
           rows={5}
         />
         <div className="note-editor-actions">

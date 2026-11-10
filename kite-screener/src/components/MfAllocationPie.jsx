@@ -11,9 +11,18 @@ function formatMoney(value) {
   return Number.isFinite(value) ? `₹${moneyFormatter.format(Math.round(value))}` : '—';
 }
 
+function planOf(row) {
+  const name = row.scheme?.name || row.holding?.fund || '';
+  if (/\bdirect\b/i.test(name)) return 'Direct';
+  if (/\bregular\b/i.test(name)) return 'Regular';
+  return 'Unspecified';
+}
+
 const DIMENSIONS = [
-  { id: 'schemeType', label: 'Type' },
-  { id: 'subCategory', label: 'Category' },
+  { id: 'schemeType', label: 'Type', get: (row) => row.scheme?.schemeType },
+  { id: 'subCategory', label: 'Category', get: (row) => row.scheme?.subCategory },
+  { id: 'amc', label: 'AMC', get: (row) => row.scheme?.amc },
+  { id: 'plan', label: 'Plan', get: planOf },
 ];
 
 const R = 60;
@@ -30,7 +39,8 @@ export default function MfAllocationPie({ rows = [] }) {
     rows.forEach((row) => {
       const value = Number(row.current) || 0;
       if (value <= 0) return;
-      const key = (row.scheme?.[dimension] || 'Other').trim() || 'Other';
+      const dim = DIMENSIONS.find((d) => d.id === dimension) || DIMENSIONS[0];
+      const key = String(dim.get(row) || 'Other').trim() || 'Other';
       map.set(key, (map.get(key) || 0) + value);
     });
     const sum = Array.from(map.values()).reduce((acc, v) => acc + v, 0);

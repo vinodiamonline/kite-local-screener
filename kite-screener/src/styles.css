@@ -4543,3 +4543,191 @@ tr.row-drop-target td {
   }
 }
 
+
+/* MF holdings: notes, NAV alerts, regular-plan flag, rebalance */
+.mf-name-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mf-name-line .mf-name {
+  min-width: 0;
+}
+
+.mf-row-tools {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.mf-row-tool {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+  opacity: 0;
+  filter: grayscale(1);
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+
+.mf-holdings-table tr:hover .mf-row-tool,
+.mf-row-tool:focus-visible {
+  opacity: 0.55;
+}
+
+.mf-row-tool:hover {
+  opacity: 1 !important;
+  background: #eef1f7;
+}
+
+.mf-row-tool.active {
+  opacity: 1;
+  filter: none;
+}
+
+.mf-row-tool.hit {
+  background: #fff4d6;
+}
+
+.mf-holdings-table tbody tr.mf-alert-hit {
+  box-shadow: inset 3px 0 0 #d4a72c;
+}
+
+.mf-tag-regular {
+  color: #9a3412;
+  background: #ffedd5;
+  cursor: help;
+}
+
+.mf-alert-banner,
+.mf-regular-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.mf-alert-banner {
+  border: 1px solid #f0d58a;
+  background: #fff8e1;
+  color: #6b4e00;
+}
+
+.mf-alert-banner-item + .mf-alert-banner-item::before {
+  content: '·';
+  margin-right: 12px;
+  color: #b8902a;
+}
+
+.mf-regular-banner {
+  display: block;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+
+.mf-alert-current {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #5a6478;
+}
+
+.mf-alert-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.mf-alert-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #5a6478;
+}
+
+.mf-alert-fields input,
+.mf-rebal-extra input,
+.mf-rebal-input {
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 1px solid #dde2ec;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  color: #303540;
+}
+
+.mf-rebal-panel {
+  width: min(760px, 96vw);
+  height: auto;
+  max-height: 92vh;
+}
+
+.mf-rebal-body {
+  padding: 12px 16px 16px;
+  overflow: auto;
+}
+
+.mf-rebal-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.mf-rebal-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2f6feb;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mf-rebal-link:hover {
+  text-decoration: underline;
+}
+
+.mf-rebal-extra {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #5a6478;
+}
+
+.mf-rebal-extra input {
+  width: 110px;
+}
+
+.mf-rebal-input {
+  width: 70px;
+  padding: 3px 6px;
+  text-align: right;
+}
+
+.mf-rebal-table tfoot td {
+  font-weight: 700;
+  border-bottom: none;
+}
+
+.mf-rebal-warn {
+  color: #b42318;
+}

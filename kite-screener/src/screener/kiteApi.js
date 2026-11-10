@@ -124,6 +124,20 @@ function toScreenerBody({ limit, offset, tags, ...rest }) {
   };
 }
 
+// Kite's OMS rejects JSON bodies ("request body must be form-encoded"). Mirror
+// Kite's own client: plain form fields, empty values and empty `tags` omitted.
+function toScreenerForm(body) {
+  const form = new URLSearchParams();
+  for (const [key, value] of Object.entries(toScreenerBody(body))) {
+    if (Array.isArray(value)) {
+      value.forEach((item) => form.append(key, String(item)));
+    } else if (value !== undefined && value !== null && value !== '') {
+      form.append(key, String(value));
+    }
+  }
+  return form;
+}
+
 async function fetchScreenerDirect(body, signal) {
   const enctoken = readEnctoken();
 
@@ -137,13 +151,13 @@ async function fetchScreenerDirect(body, signal) {
     signal,
     headers: {
       accept: 'application/json, text/plain, */*',
-      'content-type': 'application/json',
+      'content-type': 'application/x-www-form-urlencoded',
       authorization: `enctoken ${enctoken}`,
       'x-kite-userid': getUserId(),
       'x-kite-app-uuid': getAppUuid(),
       'x-kite-version': '3.0.0',
     },
-    body: JSON.stringify(toScreenerBody(body)),
+    body: toScreenerForm(body),
   });
 
   const text = await response.text();

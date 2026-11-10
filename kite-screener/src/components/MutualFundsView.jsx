@@ -11,6 +11,10 @@ import MfNavChart from './MfNavChart';
 import MfCompareModal from './MfCompareModal';
 import MfInsightsModal from './MfInsightsModal';
 import MfAllocationPie from './MfAllocationPie';
+import MfAlertEditor from './MfAlertEditor';
+import MfRebalanceModal from './MfRebalanceModal';
+import { openNoteEditor, useSymbolNotes, noteKey } from '../screener/symbolNotes';
+import { checkMfAlert, useMfAlerts } from '../screener/mfAlerts';
 
 // One-click screens. Each is category-specific so the filtered set stays small
 // enough for trailing returns to auto-load.
@@ -151,6 +155,10 @@ export default function MutualFundsView({
   const [compare, setCompare] = useState([]);
   const [compareOpen, setCompareOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
+  const [rebalanceOpen, setRebalanceOpen] = useState(false);
+  const [alertEditing, setAlertEditing] = useState(null);
+  const notes = useSymbolNotes();
+  const navAlerts = useMfAlerts();
 
   useEffect(() => {
     let cancelled = false;
@@ -273,6 +281,25 @@ export default function MutualFundsView({
 
         const invested = reportedInvested || units * avg;
         const current = units * ltp;
+
+        // Day change: the NAV published just before the one we display. Both
+        // feeds are official AMFI NAVs, so this is exact for every mapped fund.
+        let prevNav = null;
+        let prevNavDate = '';
+        const navT = best && Number.isFinite(best.t) ? best.t : null;
+        const series = ret?.series;
+        if (navT != null && Array.isArray(series)) {
+          for (let i = series.length - 1; i >= 0; i -= 1) {
+            if (series[i].t < navT) {
+              prevNav = series[i].nav;
+              prevNavDate = formatNavDate(series[i].t);
+              break;
+            }
+          }
+        }
+        const dayChange = prevNav ? units * (ltp - prevNav) : null;
+        const dayPct = prevNav ? ((ltp - prevNav) / prevNav) * 100 : null;
+        const isRegular = /\bregular\b/i.test(matched?.name || holding.fund || '');
         // When we override the NAV, Kite's pnl no longer matches, so recompute it
         // from the fresh price. Only trust Kite's pnl if we kept Kite's price.
         const rawPnl = Number(holding.pnl);
@@ -306,6 +333,12 @@ export default function MutualFundsView({
           current,
           pnl,
           pnlPct,
+          prevNav,
+          prevNavDate,
+          dayChange,
+          dayPct,
+          isRegular,
+          isin,
         };
       })
       .sort((a, b) => b.current - a.current);
@@ -317,12 +350,30 @@ export default function MutualFundsView({
         acc.invested += row.invested;
         acc.current += row.current;
         acc.pnl += row.pnl;
+        if (row.dayChange != null) {
+          acc.day += row.dayChange;
+          acc.dayBase += row.current - row.dayChange;
+          acc.dayFunds += 1;
+        }
         return acc;
       },
-      { invested: 0, current: 0, pnl: 0 },
+      { invested: 0, current: 0, pnl: 0, day: 0, dayBase: 0, dayFunds: 0 },
     ),
     [holdingRows],
   );
+
+  const triggeredAlerts = useMemo(
+    () => holdingRows
+      .map((row) => {
+        const alert = navAlerts[noteKey(row.isin)];
+        const side = checkMfAlert(alert, row.ltp);
+        return side ? { row, side, level: alert[side] } : null;
+      })
+      .filter(Boolean),
+    [holdingRows, navAlerts],
+  );
+
+  const regularCount = useMemo(() => holdingRows.filter((r) => r.isRegular).length, [holdingRows]);
 
   useEffect(() => {
     if (isHoldingsMode) onHoldingsCount?.(holdingRows.length);
@@ -570,6 +621,16 @@ export default function MutualFundsView({
               <button
                 type="button"
                 className="mf-refresh-btn"
+                onClick={() => setRebalanceOpen(true)}
+                disabled={holdingRows.length === 0}
+                title="Plan how much to add or trim to reach a target mix"
+              >
+                <span aria-hidden="true">⚖</span>
+                Rebalance
+              </button>
+              <button
+                type="button"
+                className="mf-refresh-btn"
                 onClick={handleRefreshHoldings}
                 disabled={refreshing || holdingsLoading}
                 title="Re-fetch holdings and pull the latest NAV"
@@ -601,6 +662,24 @@ export default function MutualFundsView({
                     {holdingsSummary.invested > 0 && ` (${formatPct((holdingsSummary.pnl / holdingsSummary.invested) * 100)})`}
                   </strong>
                 </div>
+                <div
+                  className="mf-holdings-summary-item"
+                  title={holdingsSummary.dayFunds < holdingRows.length
+                    ? `Covers ${holdingsSummary.dayFunds} of ${holdingRows.length} funds (NAV history still loading or unavailable)`
+                    : 'Change since each fund\'s previous NAV'}
+                >
+                  <span>Day change</span>
+                  <strong className={toneClass(holdingsSummary.day)}>
+                    {holdingsSummary.dayFunds > 0
+                      ? (
+                        <>
+                          {formatMoney(holdingsSummary.day)}
+                          {holdingsSummary.dayBase > 0 && ` (${formatPct((holdingsSummary.day / holdingsSummary.dayBase) * 100)})`}
+                        </>
+                      )
+                      : '—'}
+                  </strong>
+                </div>
               </div>
 
               <MfAllocationPie rows={holdingRows} />
@@ -608,6 +687,25 @@ export default function MutualFundsView({
           )}
 
           {holdingsError && <div className="error-box">{holdingsError}</div>}
+
+          {triggeredAlerts.length > 0 && (
+            <div className="mf-alert-banner" role="status">
+              <strong>🔔 NAV alert{triggeredAlerts.length > 1 ? 's' : ''}:</strong>
+              {triggeredAlerts.map(({ row, side, level }) => (
+                <span key={row.key} className="mf-alert-banner-item">
+                  {row.scheme.name} NAV {formatNav(row.ltp)} is {side === 'above' ? '≥' : '≤'} {formatNav(level)}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {regularCount > 0 && (
+            <div className="mf-regular-banner">
+              {regularCount} of your funds {regularCount === 1 ? 'is a ' : 'are '}
+              <strong>Regular plan{regularCount === 1 ? '' : 's'}</strong> (marked below). Regular plans charge a higher
+              expense ratio than the Direct plan of the same scheme because they include distributor commission.
+            </div>
+          )}
 
           <div className="table-scroll">
             <table className="screener-table mf-table mf-holdings-table">
@@ -620,12 +718,13 @@ export default function MutualFundsView({
                   <th className="num-cell">Invested</th>
                   <th className="num-cell">Current</th>
                   <th className="num-cell">P&amp;L</th>
+                  <th className="num-cell" title="Change since the previous NAV">Day</th>
                 </tr>
               </thead>
               <tbody>
                 {!holdingsLoading && holdingRows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="empty-cell">
+                    <td colSpan={8} className="empty-cell">
                       {holdingsError
                         ? 'Could not load your mutual-fund holdings.'
                         : 'No mutual-fund holdings found in your Zerodha account.'}
@@ -634,22 +733,64 @@ export default function MutualFundsView({
                 )}
                 {holdingsLoading && holdingRows.length === 0 && !holdingsError && (
                   <tr>
-                    <td colSpan={7} className="empty-cell">Loading your holdings…</td>
+                    <td colSpan={8} className="empty-cell">Loading your holdings…</td>
                   </tr>
                 )}
                 {holdingRows.map((row) => {
                   const selectedRow = Boolean(row.code) && selected?.schemeCode === row.code;
                   const ret = row.code ? returnsByCode[row.code] : null;
+                  const note = notes[noteKey(row.isin)] || '';
+                  const alert = navAlerts[noteKey(row.isin)] || null;
+                  const alertHit = checkMfAlert(alert, row.ltp);
+                  const alertTitle = alert
+                    ? `NAV alert: ${[alert.above != null ? `≥ ${alert.above}` : '', alert.below != null ? `≤ ${alert.below}` : ''].filter(Boolean).join(' or ')}${alertHit ? ' — triggered' : ''}`
+                    : 'Set a NAV alert';
                   return (
                     <tr
                       key={row.key}
-                      className={`${selectedRow ? 'selected-row' : ''}${row.code ? '' : ' mf-holdings-unlinked'}`}
+                      className={`${selectedRow ? 'selected-row' : ''}${row.code ? '' : ' mf-holdings-unlinked'}${alertHit ? ' mf-alert-hit' : ''}`}
                       onClick={() => row.code && setSelected(row.scheme)}
                     >
                       <td className="symbol-cell align-left">
                         <span className="symbol-text">
-                          <span className="mf-name">{row.scheme.name}</span>
+                          <span className="mf-name-line">
+                            <span className="mf-name" title={note ? `${row.scheme.name}\n\nNote: ${note}` : row.scheme.name}>
+                              {row.scheme.name}
+                            </span>
+                            <span className="mf-row-tools">
+                              <button
+                                type="button"
+                                className={`mf-row-tool${note ? ' active' : ''}`}
+                                title={note ? `Note: ${note}` : 'Add a note'}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openNoteEditor(row.isin, { label: row.scheme.name });
+                                }}
+                              >
+                                ✎
+                              </button>
+                              <button
+                                type="button"
+                                className={`mf-row-tool${alert ? ' active' : ''}${alertHit ? ' hit' : ''}`}
+                                title={alertTitle}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setAlertEditing({ isin: row.isin, name: row.scheme.name, nav: row.ltp });
+                                }}
+                              >
+                                🔔
+                              </button>
+                            </span>
+                          </span>
                           <span className="mf-sub">
+                            {row.isRegular && (
+                              <span
+                                className="mf-tag mf-tag-regular"
+                                title="Regular plan: includes distributor commission, so its expense ratio is higher than the Direct plan of the same scheme."
+                              >
+                                Regular
+                              </span>
+                            )}
                             {row.scheme.subCategory && <span className="mf-tag">{row.scheme.subCategory}</span>}
                             {row.holding.folio && <span className="mf-amc">Folio {row.holding.folio}</span>}
                             {ret?.r1y != null && <span className="mf-amc">1Y {formatPct(ret.r1y)}</span>}
@@ -675,12 +816,35 @@ export default function MutualFundsView({
                         <span className="mf-holdings-pnl">{formatMoney(row.pnl)}</span>
                         <small className="mf-holdings-pnl-pct">{formatPct(row.pnlPct)}</small>
                       </td>
+                      <td
+                        className={`num-cell ${toneClass(row.dayChange)}`}
+                        title={row.prevNav ? `NAV ${formatNav(row.prevNav)} (${row.prevNavDate}) → ${formatNav(row.ltp)} (${row.navDate})` : 'Previous NAV not available yet'}
+                      >
+                        {row.dayChange != null ? (
+                          <>
+                            <span className="mf-holdings-pnl">{formatMoney(row.dayChange)}</span>
+                            <small className="mf-holdings-pnl-pct">{formatPct(row.dayPct)}</small>
+                          </>
+                        ) : '—'}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+          {rebalanceOpen && (
+            <MfRebalanceModal rows={holdingRows} onClose={() => setRebalanceOpen(false)} />
+          )}
+          {alertEditing && (
+            <MfAlertEditor
+              isin={alertEditing.isin}
+              name={alertEditing.name}
+              nav={alertEditing.nav}
+              alert={navAlerts[noteKey(alertEditing.isin)] || null}
+              onClose={() => setAlertEditing(null)}
+            />
+          )}
         </main>
       ) : (
       <main className="table-panel mf-panel">

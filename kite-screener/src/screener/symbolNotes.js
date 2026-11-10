@@ -65,10 +65,10 @@ export function useSymbolNotes() {
   return useSyncExternalStore(subscribe, () => notes);
 }
 
-export function openNoteEditor(entry) {
+export function openNoteEditor(entry, { label } = {}) {
   const key = noteKey(entry);
   if (!key) return;
-  editing = { symbol: key };
+  editing = { symbol: key, label: label || '' };
   emit();
 }
 
