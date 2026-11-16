@@ -2,6 +2,7 @@ import {
   BOOKMARKS_SCREENER_ID,
   CATEGORIES,
   DASHBOARD_SCREENER_ID,
+  ETF_SIGNALS_SCREENER_ID,
   HIDDEN_SCREENER_ID,
   HOLDINGS_SCREENER_ID,
   POSITIONS_SCREENER_ID,
@@ -178,6 +179,15 @@ export default function ScreenerNav({
                 onClick={() => setActiveScreenerId(DASHBOARD_SCREENER_ID)}
               >
                 <span className="wl-item-name">Dashboard</span>
+              </button>
+            </div>
+            <div className={`wl-item wl-item-fixed${activeScreenerId === ETF_SIGNALS_SCREENER_ID ? ' active' : ''}`}>
+              <button
+                type="button"
+                className="wl-item-main"
+                onClick={() => setActiveScreenerId(ETF_SIGNALS_SCREENER_ID)}
+              >
+                <span className="wl-item-name">ETF Signals</span>
               </button>
             </div>
           </div>

@@ -88,7 +88,7 @@ export default function SignalTooltip({ anchor, symbol, currentPrice, signal, no
     <div ref={ref} className={`signal-tooltip signal-tooltip-${category}`} style={style} role="tooltip">
       <div className="signal-tt-head">
         <span className="signal-tt-symbol">{symbol}</span>
-        <span className={`signal-badge signal-${category}`}>{ex.label.toUpperCase()}</span>
+        <span className={`signal-badge signal-${ex.tone || category}`}>{ex.label.toUpperCase()}</span>
       </div>
 
       <p className="signal-tt-summary">{ex.summary}</p>

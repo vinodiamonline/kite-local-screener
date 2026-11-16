@@ -5,6 +5,7 @@ import BookmarkSearch from './BookmarkSearch';import MarketCapTag from './Market
 import ScreenerFilters from './ScreenerFilters';
 import SymbolContextMenu from './SymbolContextMenu';
 import SignalTooltip, { hasSignal } from './SignalTooltip';
+import { signalView } from '../screener/signals/explain';
 import { getSymbolNote, useSymbolNotes } from '../screener/symbolNotes';
 
 export default function ScreenerTable({
@@ -416,11 +417,14 @@ export default function ScreenerTable({
                                 {getSymbol(row)}
                               </span>
                               {note && <span className="symbol-note-mark" aria-label="Has note">✎</span>}
-                              {hasSignal(signal) && signal.category !== 'hold' && (
-                                <span className={`signal-tag signal-${signal.category}`}>
-                                  {signal.category === 'strong-buy' ? 'STRONG BUY' : signal.category.toUpperCase()}
-                                </span>
-                              )}
+                              {hasSignal(signal) && signal.category !== 'hold' && (() => {
+                                const view = signalView(signal, undefined, Number(row?.last_price));
+                                return (
+                                  <span className={`signal-tag signal-${view.tone}`}>
+                                    {view.label.toUpperCase()}
+                                  </span>
+                                );
+                              })()}
                               <MarketCapTag marketCap={row?.market_cap} />
                             </span>
                             {getCompanyName(row) && (

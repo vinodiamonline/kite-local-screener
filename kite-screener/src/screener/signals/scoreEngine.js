@@ -1,7 +1,8 @@
 // Weighted-score engine: turns a candle series into a Buy/Hold/Sell verdict plus
 // the price levels shown on hover.
 //
-// - Score: weighted average of every strategy vote in [-1, +1].
+// - Score: weighted average of every strategy vote in [-1, +1]; contrarian
+//   strategies are down-weighted as the trend strengthens (CONTRARIAN_DAMPING).
 // - Category: fixed thresholds (see registry SCORE_THRESHOLDS).
 // - Levels: derived from the band/structure indicators, blended with the score:
 //     buy  → upper entry cap (nearest resistance / upper Bollinger / swing high)
@@ -13,7 +14,9 @@ import {
   williamsR, cci, roc, obv, mfi, vwapRolling, adLine, vpt, psar, ichimoku,
   pivotPoints, supportResistance, last,
 } from './indicators';
-import { STRATEGIES, SCORE_THRESHOLDS, STRATEGY_CATEGORY_BY_ID } from './registry';
+import {
+  STRATEGIES, SCORE_THRESHOLDS, STRATEGY_CATEGORY_BY_ID, CONTRARIAN_DAMPING, EXTREME_LEVELS,
+} from './registry';
 
 const MIN_CANDLES = 60;
 
@@ -84,6 +87,60 @@ function buildIndicators({ highs, lows, closes, volumes }) {
   };
 }
 
+// 'overbought' | 'oversold' | null, from RSI or price outside the Bollinger bands.
+function extremeOf(price, ind) {
+  const { rsiHigh, rsiLow, pctBHigh, pctBLow } = EXTREME_LEVELS;
+  const rsiV = last(ind.rsi);
+  const u = last(ind.boll.upper);
+  const l = last(ind.boll.lower);
+  const pctB = u != null && l != null && u !== l ? (price - l) / (u - l) : null;
+  if ((rsiV != null && rsiV >= rsiHigh) || (pctB != null && pctB >= pctBHigh)) return 'overbought';
+  if ((rsiV != null && rsiV <= rsiLow) || (pctB != null && pctB <= pctBLow)) return 'oversold';
+  return null;
+}
+
+// Raw indicator values at the last candle, for the detailed "values" table.
+// Kept small (plain numbers) because it is cached per symbol in localStorage.
+function pctChange(arr, lookback) {
+  const cur = last(arr);
+  const past = Array.isArray(arr) ? arr[arr.length - 1 - lookback] : null;
+  if (cur == null || past == null || past === 0) return null;
+  return ((cur - past) / Math.abs(past)) * 100;
+}
+
+function snapshotReadings(ctx) {
+  const { price, closes, volumes, ind } = ctx;
+  const u = last(ind.boll.upper);
+  const l = last(ind.boll.lower);
+  const round = (v, d = 2) => (v == null || !Number.isFinite(v) ? null : Number(v.toFixed(d)));
+  const r = {
+    price,
+    sma20: last(ind.sma20), sma50: last(ind.sma50), sma200: last(ind.sma200),
+    ema9: last(ind.ema9), ema12: last(ind.ema12), ema21: last(ind.ema21),
+    ema26: last(ind.ema26), ema50: last(ind.ema50), ema50Slope: pctChange(ind.ema50, 20),
+    macd: last(ind.macd.macd), macdSignal: last(ind.macd.signal), macdHist: last(ind.macd.hist),
+    adx: last(ind.adx.adx), plusDI: last(ind.adx.plusDI), minusDI: last(ind.adx.minusDI),
+    psar: last(ind.psar),
+    ichiSpanA: last(ind.ichimoku.spanA), ichiSpanB: last(ind.ichimoku.spanB),
+    tenkan: last(ind.ichimoku.tenkan), kijun: last(ind.ichimoku.kijun),
+    rsi: last(ind.rsi), stochK: last(ind.stoch.k), stochD: last(ind.stoch.d),
+    williams: last(ind.williams), cci: last(ind.cci), roc: last(ind.roc), mfi: last(ind.mfi),
+    bollUpper: u, bollLower: l, pctB: u != null && l != null && u !== l ? (price - l) / (u - l) : null,
+    keltnerUpper: last(ind.keltner.upper), keltnerLower: last(ind.keltner.lower),
+    donchianUpper: last(ind.donchian.upper), donchianLower: last(ind.donchian.lower),
+    atr: last(ind.atr), change15: pctChange(closes, 14),
+    swingHigh: ind.sr.swingHigh, swingLow: ind.sr.swingLow,
+    support: ind.sr.nearestSupport, resistance: ind.sr.nearestResistance,
+    pivot: ind.pivots?.p ?? null,
+    zScore: last(ind.stdev20) ? (price - last(ind.sma20)) / last(ind.stdev20) : null,
+    vwap: last(ind.vwap),
+    obvChange: pctChange(ind.obv, 20), adChange: pctChange(ind.ad, 20), vptChange: pctChange(ind.vpt, 20),
+    volRatio: last(ind.volSma20) ? last(volumes) / last(ind.volSma20) : null,
+  };
+  for (const k of Object.keys(r)) r[k] = round(r[k], k === 'pctB' || k === 'zScore' || k === 'volRatio' ? 3 : 2);
+  return r;
+}
+
 function categoryFor(score) {
   if (score >= SCORE_THRESHOLDS.strongBuy) return 'strong-buy';
   if (score >= SCORE_THRESHOLDS.buy) return 'buy';
@@ -131,6 +188,8 @@ function deriveLevels({ price, ind }) {
   return {
     price,
     atr: atrV,
+    sma20: last(ind.sma20),
+    sma50: last(ind.sma50),
     buyCap: cap.value,
     buyCapSource: cap.source,
     sellFloor: floor.value,
@@ -145,6 +204,7 @@ function deriveLevels({ price, ind }) {
 /**
  * Score a candle series. Returns null when there isn't enough history.
  * @returns {{score:number, category:'strong-buy'|'buy'|'hold'|'sell', levels:object,
+ *            extreme:'overbought'|'oversold'|null, capped:boolean,
  *            contributions:Array, evaluated:number}}
  */
 export function scoreSeries(candles) {
@@ -155,6 +215,16 @@ export function scoreSeries(candles) {
   const ind = buildIndicators(cols);
   const price = last(cols.closes);
   const ctx = { ...cols, price, ind };
+
+  // 0 in a range (ADX ≤ adxFrom) → 1 in a strong trend (ADX ≥ adxFull).
+  // No trimming at an extreme: then overbought/oversold readings count fully.
+  const { adxFrom, adxFull, maxCut } = CONTRARIAN_DAMPING;
+  const extreme = extremeOf(price, ind);
+  const adxNow = last(ind.adx.adx);
+  const trendStrength = adxNow == null || extreme
+    ? 0
+    : Math.max(0, Math.min(1, (adxNow - adxFrom) / (adxFull - adxFrom)));
+  const contrarianFactor = 1 - maxCut * trendStrength;
 
   let weighted = 0;
   let totalWeight = 0;
@@ -168,21 +238,29 @@ export function scoreSeries(candles) {
     }
     if (vote == null || Number.isNaN(vote)) continue;
     const v = Math.max(-1, Math.min(1, vote));
-    weighted += v * strat.weight;
-    totalWeight += strat.weight;
+    const weight = strat.contrarian ? strat.weight * contrarianFactor : strat.weight;
+    weighted += v * weight;
+    totalWeight += weight;
     contributions.push({
       id: strat.id,
       label: strat.label,
       category: STRATEGY_CATEGORY_BY_ID[strat.id] || 'other',
       vote: v,
-      weight: strat.weight,
+      weight,
     });
   }
 
   const score = totalWeight ? weighted / totalWeight : 0;
+  let category = categoryFor(score);
+  // Don't call a stretched stock a Strong Buy: buy-on-dip territory at best.
+  const capped = extreme === 'overbought' && category === 'strong-buy';
+  if (capped) category = 'buy';
   return {
     score,
-    category: categoryFor(score),
+    category,
+    extreme,
+    capped,
+    readings: snapshotReadings(ctx),
     levels: deriveLevels({ price, ind }),
     contributions,
     evaluated: contributions.length,

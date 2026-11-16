@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ChartPanel from './components/ChartPanel';
 import DashboardView from './components/DashboardView';
+import EtfSignalsView from './components/EtfSignalsView';
 import GlobalFilterBar from './components/GlobalFilterBar';
 import MutualFundsView from './components/MutualFundsView';
 import PositionsView from './components/PositionsView';
@@ -46,6 +47,7 @@ import {
   createWatchlist,
   deleteWatchlist,
   isInWatchlist,
+  isEtfsWatchlistName,
   isWatchlistScreenerId,
   loadWatchlists,
   migrateWatchlist1ToBookmarks,
@@ -59,6 +61,7 @@ import {
 import {
   BOOKMARKS_SCREENER_ID,
   DASHBOARD_SCREENER_ID,
+  ETF_SIGNALS_SCREENER_ID,
   POSITIONS_SCREENER_ID,
   HOLDINGS_SCREENER_ID,
   CATEGORIES,
@@ -75,7 +78,7 @@ import { loadSavedFunds, saveSavedFunds, isFundSaved as isFundSavedInList, toggl
 import { filterHoldings, normalizeHolding, normalizePosition } from './screener/positions';
 import { buildRequestBody } from './screener/queryBuilder';
 import { mergeLiveTickRow } from './screener/liveTick';
-import { useBookmarkSignals } from './screener/signals/useBookmarkSignals';
+import { hasSignalEntries, useBookmarkSignals } from './screener/signals/useBookmarkSignals';
 import { INDEX_SHORTCUTS } from './screener/indexShortcuts';
 import { KiteTicker, requestEnctoken } from './screener/kiteTicker';
 import {
@@ -166,6 +169,7 @@ export default function App() {
   const [mfHoldingsCount, setMfHoldingsCount] = useState(0);
   const [activeScreenerId, setActiveScreenerId] = useState(BOOKMARKS_SCREENER_ID);
   const [dashboardTokens, setDashboardTokens] = useState([]);
+  const [etfSignalTokens, setEtfSignalTokens] = useState([]);
   const [positionsTokens, setPositionsTokens] = useState([]);
   const [portfolioCounts, setPortfolioCounts] = useState({ positionCount: 0, holdingsCount: 0 });
   const [marketCapId, setMarketCapId] = useState('all');
@@ -193,6 +197,7 @@ export default function App() {
   const mountedRef = useRef(true);
 
   const isDashboardView = activeScreenerId === DASHBOARD_SCREENER_ID;
+  const isEtfSignalsView = activeScreenerId === ETF_SIGNALS_SCREENER_ID;
   const isPositionsView = activeScreenerId === POSITIONS_SCREENER_ID;
   const isHoldingsView = activeScreenerId === HOLDINGS_SCREENER_ID;
   const isPortfolioView = isPositionsView || isHoldingsView;
@@ -212,6 +217,10 @@ export default function App() {
   const indexWatchlistItems = useMemo(() => {
     const list = watchlists.find((item) => item.name?.trim().toLowerCase() === 'indices');
     return list?.items || [];
+  }, [watchlists]);
+  const etfWatchlistItems = useMemo(() => {
+    const list = watchlists.find((item) => isEtfsWatchlistName(item.name));
+    return list?.items?.length ? list.items : ETF_WATCHLIST_ITEMS;
   }, [watchlists]);
 
   const activeListItems = isBookmarksView
@@ -514,6 +523,10 @@ export default function App() {
       dashboardTokens.forEach((token) => {
         if (Number.isFinite(token) && token > 0) set.add(token);
       });
+    } else if (isEtfSignalsView) {
+      etfSignalTokens.forEach((token) => {
+        if (Number.isFinite(token) && token > 0) set.add(token);
+      });
     } else if (isPortfolioView) {
       positionsTokens.forEach((token) => {
         if (Number.isFinite(token) && token > 0) set.add(token);
@@ -526,7 +539,7 @@ export default function App() {
       });
     }
     return Array.from(set);
-  }, [baseRows, indexTokensById, isDashboardView, dashboardTokens, isPortfolioView, positionsTokens]);
+  }, [baseRows, indexTokensById, isDashboardView, dashboardTokens, isPortfolioView, positionsTokens, isEtfSignalsView, etfSignalTokens]);
 
   const tokenKey = visibleTokens.join(',');
 
@@ -588,7 +601,7 @@ export default function App() {
       return undefined;
     }
 
-    if (isListView || isDashboardView || isPortfolioView || isMutualFundsView) {
+    if (isListView || isDashboardView || isEtfSignalsView || isPortfolioView || isMutualFundsView) {
       setLoading(false);
       setLoadingMore(false);
       setHasMore(false);
@@ -630,7 +643,7 @@ export default function App() {
       });
 
     return () => controller.abort();
-  }, [embedded, isListView, isDashboardView, isPortfolioView, isMutualFundsView, activeScreener, requestBody, marketCapId, limit, refreshKey]);
+  }, [embedded, isListView, isDashboardView, isEtfSignalsView, isPortfolioView, isMutualFundsView, activeScreener, requestBody, marketCapId, limit, refreshKey]);
 
   const loadMore = useCallback(() => {
     if (isListView || !embedded || !hasSession() || loading || loadingMore || !hasMore) return;
@@ -901,7 +914,7 @@ export default function App() {
         indexTokensById={indexTokensById}
       />
 
-      <div className={`workspace${isDashboardView ? ' workspace-dashboard' : ''}${isPortfolioView ? ' workspace-portfolio' : ''}${isMutualFundsView ? ' workspace-mf' : ''}`}>
+      <div className={`workspace${isDashboardView || isEtfSignalsView ? ' workspace-dashboard' : ''}${isPortfolioView ? ' workspace-portfolio' : ''}${isMutualFundsView ? ' workspace-mf' : ''}`}>
         <ScreenerNav
           bookmarkCount={bookmarks.length}
           hiddenCount={hiddenSymbols.length}
@@ -927,6 +940,13 @@ export default function App() {
             isFundSaved={isFundSaved}
             onToggleSave={toggleSaveFund}
             onHoldingsCount={setMfHoldingsCount}
+          />
+        ) : isEtfSignalsView ? (
+          <EtfSignalsView
+            embedded={embedded}
+            etfItems={etfWatchlistItems}
+            liveTicks={liveTicks}
+            onVisibleTokens={setEtfSignalTokens}
           />
         ) : isDashboardView ? (
           <DashboardView
@@ -987,7 +1007,7 @@ export default function App() {
                   : undefined
               }
               signalsByKey={signalsEnabled ? bookmarkSignals : null}
-              onAnalyzeSignals={isWatchlistView && embedded ? analyzeWatchlistSignals : undefined}
+              onAnalyzeSignals={isWatchlistView && embedded && hasSignalEntries(activeListItems) ? analyzeWatchlistSignals : undefined}
               signalsLoading={signalsLoading}
               signalsProgress={signalsProgress}
               liveQuotes={isListView}

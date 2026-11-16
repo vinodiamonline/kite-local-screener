@@ -11,7 +11,20 @@
 import { last } from './indicators';
 
 // --- Score → category thresholds (tunable in one place) ---------------------
-export const SCORE_THRESHOLDS = { strongBuy: 0.40, buy: 0.20, sell: -0.10 };
+// Symmetric Buy/Sell cut-offs around 0, tuned on simulated trends together
+// with the contrarian damping below.
+export const SCORE_THRESHOLDS = { strongBuy: 0.35, buy: 0.15, sell: -0.15 };
+
+// Strategies flagged `contrarian: true` (overbought/oversold, band and
+// mean-reversion reads) fight the trend: in a rally they vote "sell" simply
+// because price is high. Their weight is trimmed (up to maxCut) as ADX shows a
+// stronger trend, so a healthy trend isn't cancelled out — but only while the
+// stock is NOT at an extreme. At an extreme (see EXTREME_LEVELS) they keep
+// full weight, and an overbought stock is capped at Buy (never Strong Buy).
+export const CONTRARIAN_DAMPING = { adxFrom: 20, adxFull: 35, maxCut: 0.4 };
+
+// RSI or Bollinger %B (0 = lower band, 1 = upper band) beyond these = extreme.
+export const EXTREME_LEVELS = { rsiHigh: 75, rsiLow: 25, pctBHigh: 1, pctBLow: 0 };
 
 function clamp(x, lo = -1, hi = 1) {
   if (x == null || Number.isNaN(x)) return 0;
@@ -167,12 +180,14 @@ export const STRATEGIES = [
   // --- Momentum / oscillators ----------------------------------------------
   {
     id: 'rsi',
+    contrarian: true,
     label: 'RSI',
     weight: 1.1,
     evaluate: ({ ind }) => oscVote(last(ind.rsi), 30, 70),
   },
   {
     id: 'stochastic',
+    contrarian: true,
     label: 'Stochastic Oscillator',
     weight: 0.9,
     evaluate: ({ ind }) => {
@@ -186,12 +201,14 @@ export const STRATEGIES = [
   },
   {
     id: 'williams-r',
+    contrarian: true,
     label: 'Williams %R',
     weight: 0.8,
     evaluate: ({ ind }) => oscVote(last(ind.williams), -80, -20),
   },
   {
     id: 'cci',
+    contrarian: true,
     label: 'CCI',
     weight: 0.8,
     evaluate: ({ ind }) => {
@@ -212,6 +229,7 @@ export const STRATEGIES = [
   },
   {
     id: 'mfi',
+    contrarian: true,
     label: 'Money Flow Index',
     weight: 0.9,
     evaluate: ({ ind }) => oscVote(last(ind.mfi), 20, 80),
@@ -220,6 +238,7 @@ export const STRATEGIES = [
   // --- Volatility / bands ---------------------------------------------------
   {
     id: 'bollinger',
+    contrarian: true,
     label: 'Bollinger Bands',
     weight: 1,
     evaluate: ({ price, ind }) => {
@@ -232,6 +251,7 @@ export const STRATEGIES = [
   },
   {
     id: 'keltner',
+    contrarian: true,
     label: 'Keltner Channels',
     weight: 0.8,
     evaluate: ({ price, ind }) => {
@@ -287,6 +307,7 @@ export const STRATEGIES = [
   },
   {
     id: 'support-resistance',
+    contrarian: true,
     label: 'Support / Resistance',
     weight: 0.9,
     evaluate: ({ price, ind }) => {
@@ -309,6 +330,7 @@ export const STRATEGIES = [
   },
   {
     id: 'mean-reversion',
+    contrarian: true,
     label: 'Mean Reversion',
     weight: 0.9,
     evaluate: ({ price, ind }) => {

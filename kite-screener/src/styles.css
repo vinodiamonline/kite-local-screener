@@ -4731,3 +4731,77 @@ tr.row-drop-target td {
 .mf-rebal-warn {
   color: #b42318;
 }
+/* --- ETF Signals view --- */
+.etf-sig-view { gap: 8px; }
+.etf-sig-toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 2px 0; }
+.etf-sig-title { font-size: 14px; font-weight: 700; color: #222; }
+.etf-sig-meta { flex: 1; font-size: 11px; color: #888; }
+.etf-sig-btn {
+  border: 1px solid #d0d7de; background: #fff; border-radius: 4px; padding: 3px 8px;
+  font-size: 11px; font-weight: 600; color: #333; cursor: pointer;
+}
+.etf-sig-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.etf-sig-btn:disabled { opacity: 0.5; cursor: default; }
+.etf-sig-btn-icon { font-size: 13px; padding: 1px 7px; }
+.etf-sig-progress { height: 3px; background: #e6e8ee; border-radius: 2px; overflow: hidden; }
+.etf-sig-progress > div { height: 100%; background: var(--accent); transition: width 0.2s; }
+
+.etf-sig-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 0.6fr); gap: 8px; }
+.etf-sig-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px;
+  background: #fff; border: 1px solid #e3e6ec; border-left: 4px solid #999; border-radius: 6px;
+  cursor: pointer; text-align: left;
+}
+.etf-sig-card:hover { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); }
+.etf-sig-card.is-active { box-shadow: 0 0 0 2px var(--accent) inset; }
+.etf-sig-card.is-minor { opacity: 0.85; }
+.etf-sig-card-strong-buy { border-left-color: #087f5b; }
+.etf-sig-card-buy { border-left-color: var(--up); }
+.etf-sig-card-sell { border-left-color: var(--down); }
+.etf-sig-card-hold { border-left-color: #b0810a; }
+.etf-sig-card-label { font-size: 11px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.03em; }
+.etf-sig-card-count { font-size: 20px; font-weight: 700; color: #222; line-height: 1.1; }
+.etf-sig-card-sub { display: flex; gap: 8px; font-size: 10px; color: #666; }
+
+.etf-sig-table-wrap { flex: 1; min-height: 0; overflow: auto; background: #fff; border: 1px solid #e3e6ec; border-radius: 6px; }
+.etf-sig-empty { padding: 24px; font-size: 12px; color: #666; text-align: center; }
+.etf-sig-table, .etf-sig-ind, .etf-sig-mini { width: 100%; border-collapse: collapse; font-family: var(--table-font); font-size: 12px; }
+.etf-sig-table th {
+  position: sticky; top: 0; z-index: 1; background: #fafbfc; text-align: left; font-size: 10px;
+  font-weight: 700; color: #777; text-transform: uppercase; padding: 6px 8px; border-bottom: 1px solid #e3e6ec;
+  white-space: nowrap;
+}
+.etf-sig-th { cursor: pointer; user-select: none; }
+.etf-sig-th.is-sorted { color: var(--accent); }
+.etf-sig-table td { padding: 5px 8px; border-bottom: 1px solid #f0f1f4; white-space: nowrap; }
+.etf-sig-table .num, .etf-sig-ind .num, .etf-sig-mini .num { text-align: right; font-variant-numeric: tabular-nums; }
+.etf-sig-row { cursor: pointer; }
+.etf-sig-row:hover, .etf-sig-row.is-open { background: #f5f8ff; }
+.etf-sig-caret { display: inline-block; width: 12px; color: #999; }
+.etf-sig-name { margin-left: 6px; font-size: 10px; color: #999; }
+.etf-sig-section { font-size: 11px; color: #777; }
+.etf-sig-pct { display: block; font-size: 10px; color: #999; }
+.etf-sig-view .is-up { color: var(--up); }
+.etf-sig-view .is-down { color: var(--down); }
+.etf-sig-leans { display: flex; gap: 4px; }
+.etf-sig-lean { font-size: 10px; font-weight: 700; padding: 0 3px; border-radius: 3px; background: #f1f2f5; color: #888; cursor: help; }
+.etf-sig-lean.lean-up { background: #e6f4ea; color: var(--up); }
+.etf-sig-lean.lean-down { background: #fdecee; color: var(--down); }
+
+.etf-sig-detail-row > td { background: #fbfcfe; padding: 10px 12px 14px; white-space: normal; }
+.etf-sig-detail { display: flex; flex-direction: column; gap: 10px; }
+.etf-sig-detail-top { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.etf-sig-detail-head { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #666; }
+.etf-sig-summary { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: #333; }
+.etf-sig-warnings { margin: 6px 0 0; padding: 0; list-style: none; font-size: 11px; color: #9a6700; }
+.etf-sig-warnings li + li { margin-top: 2px; }
+.etf-sig-mini, .etf-sig-ind { background: #fff; border: 1px solid #eceef2; }
+.etf-sig-mini th, .etf-sig-ind th {
+  text-align: left; font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase;
+  padding: 4px 6px; background: #f6f7f9; border-bottom: 1px solid #eceef2;
+}
+.etf-sig-mini td, .etf-sig-ind td { padding: 3px 6px; border-bottom: 1px solid #f3f4f6; font-size: 11px; white-space: nowrap; }
+.etf-sig-value { font-variant-numeric: tabular-nums; color: #333; }
+.etf-sig-muted { color: #999; }
+.etf-sig-view .lean-up { color: var(--up); }
+.etf-sig-view .lean-down { color: var(--down); }

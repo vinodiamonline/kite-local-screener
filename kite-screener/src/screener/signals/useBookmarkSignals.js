@@ -16,15 +16,28 @@ import { scoreSeries } from './scoreEngine';
 
 const LOOKBACK_DAYS = 730;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6h
-const STORAGE_KEY = 'kite-screener-signal-cache-v6';
+const STORAGE_KEY = 'kite-screener-signal-cache-v9';
 const CONCURRENCY = 4;
 
 const memCache = new Map(); // token -> { at, result }
 let storeMemo = null; // parsed localStorage cache, loaded once per page
 
+export function isIndexEntry(entry) {
+  const seg = String(entry?.segment || '').toUpperCase();
+  const exch = String(entry?.exchange || '').toUpperCase();
+  return seg === 'INDICES' || exch === 'INDICES';
+}
+
+/** True when the list has at least one entry that can get a signal. */
+export function hasSignalEntries(entries) {
+  return (entries || []).some((e) => e && e.type !== 'separator' && (e.tradingsymbol || e.symbol) && !isIndexEntry(e));
+}
+
 function loadStore() {
   if (storeMemo) return storeMemo;
   try {
+    // Drop caches from older scoring versions; they are never read again.
+    for (let v = 1; v < 9; v += 1) localStorage.removeItem(`kite-screener-signal-cache-v${v}`);
     const raw = localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     storeMemo = parsed && typeof parsed === 'object' ? parsed : {};
@@ -81,8 +94,10 @@ export function useBookmarkSignals(entries, {
   const genRef = useRef(0);
   const forceKeyRef = useRef(refreshKey);
 
+  // Indices are not tradable, so they get no Buy/Hold/Sell signal.
   const stockEntries = useMemo(
-    () => (entries || []).filter((e) => e && e.type !== 'separator' && (e.tradingsymbol || e.symbol)),
+    () => (entries || []).filter((e) => e && e.type !== 'separator' && (e.tradingsymbol || e.symbol)
+      && !isIndexEntry(e)),
     [entries],
   );
   const entriesKey = stockEntries.map((e) => bookmarkKey(e)).join(',');
@@ -144,6 +159,9 @@ export function useBookmarkSignals(entries, {
           const payload = {
             category: result.category,
             score: result.score,
+            extreme: result.extreme,
+            capped: result.capped,
+            readings: result.readings,
             levels: result.levels,
             contributions: result.contributions,
           };

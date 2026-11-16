@@ -27,6 +27,7 @@ export const DEFAULT_COLUMNS = [
 export const BOOKMARKS_SCREENER_ID = 'bookmarks';
 export const HIDDEN_SCREENER_ID = 'hidden';
 export const DASHBOARD_SCREENER_ID = 'dashboard';
+export const ETF_SIGNALS_SCREENER_ID = 'etf-signals';
 export const POSITIONS_SCREENER_ID = 'positions';
 export const HOLDINGS_SCREENER_ID = 'holdings';
 export const MUTUAL_FUNDS_SCREENER_ID = 'mutual-funds';
