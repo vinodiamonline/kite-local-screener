@@ -172,6 +172,7 @@ export default function App() {
   const [etfSignalTokens, setEtfSignalTokens] = useState([]);
   const [positionsTokens, setPositionsTokens] = useState([]);
   const [portfolioCounts, setPortfolioCounts] = useState({ positionCount: 0, holdingsCount: 0 });
+  const [holdingsBySymbol, setHoldingsBySymbol] = useState({});
   const [marketCapId, setMarketCapId] = useState('all');
   const [sector, setSector] = useState('');
   const [limit, setLimit] = useState(TARGET_ROWS_DEFAULT);
@@ -888,10 +889,23 @@ export default function App() {
     ])
       .then(([{ net }, holdingsData]) => {
         if (controller.signal.aborted) return;
+        const held = filterHoldings((holdingsData || []).map(normalizeHolding));
         setPortfolioCounts({
           positionCount: (net || []).length,
-          holdingsCount: filterHoldings((holdingsData || []).map(normalizeHolding)).length,
+          holdingsCount: held.length,
         });
+        const bySymbol = {};
+        held.forEach((h) => {
+          const sym = String(h.tradingsymbol || '').toUpperCase();
+          const qty = Number(h.holding_quantity) || 0;
+          if (!sym || qty <= 0) return;
+          const prev = bySymbol[sym];
+          // Same symbol can be held on NSE and BSE; merge into one weighted entry.
+          const totalQty = (prev?.qty || 0) + qty;
+          const cost = (prev ? prev.qty * prev.avg : 0) + qty * (Number(h.average_price) || 0);
+          bySymbol[sym] = { qty: totalQty, avg: totalQty ? cost / totalQty : 0 };
+        });
+        setHoldingsBySymbol(bySymbol);
       })
       .catch(() => {
         if (!controller.signal.aborted) {
@@ -946,6 +960,7 @@ export default function App() {
             embedded={embedded}
             etfItems={etfWatchlistItems}
             liveTicks={liveTicks}
+            holdingsBySymbol={holdingsBySymbol}
             onVisibleTokens={setEtfSignalTokens}
           />
         ) : isDashboardView ? (

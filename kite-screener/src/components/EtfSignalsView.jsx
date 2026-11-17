@@ -83,6 +83,7 @@ function levelPair(groupId, signal, view) {
 const SORTERS = {
   symbol: (r) => r.symbol,
   section: (r) => r.section,
+  held: (r) => (r.holding ? r.holding.qty * (r.price || 0) : null),
   ltp: (r) => r.price,
   day: (r) => r.dayPct,
   score: (r) => r.score,
@@ -92,7 +93,7 @@ const SORTERS = {
   adx: (r) => r.adx,
 };
 
-export default function EtfSignalsView({ embedded, etfItems, liveTicks, onVisibleTokens }) {
+export default function EtfSignalsView({ embedded, etfItems, liveTicks, holdingsBySymbol = {}, onVisibleTokens }) {
   const [scan, setScan] = useState(false);
   const [forceKey, setForceKey] = useState(0);
   const [activeGroup, setActiveGroup] = useState('strong-buy');
@@ -131,9 +132,16 @@ export default function EtfSignalsView({ embedded, etfItems, liveTicks, onVisibl
       const groupId = groupOf(signal, view);
       const [l1, l2] = levelPair(groupId, signal, view);
       const dayPct = Number(tick?.change_percent);
+      const symbol = item.tradingsymbol || item.symbol;
+      const holding = holdingsBySymbol[String(symbol).toUpperCase()] || null;
+      const holdPnlPct = holding && holding.avg > 0 && Number.isFinite(price)
+        ? ((price - holding.avg) / holding.avg) * 100
+        : null;
       out[groupId].push({
         key: bookmarkKey(item),
-        symbol: item.tradingsymbol || item.symbol,
+        symbol,
+        holding,
+        holdPnlPct,
         name: item.name || '',
         section,
         signal,
@@ -151,7 +159,7 @@ export default function EtfSignalsView({ embedded, etfItems, liveTicks, onVisibl
       });
     }
     return { out, missing };
-  }, [entries, signals, liveTicks]);
+  }, [entries, signals, liveTicks, holdingsBySymbol]);
 
   const activeRows = useMemo(() => {
     const list = [...(rowsByGroup.out[activeGroup] || [])];
@@ -233,7 +241,14 @@ export default function EtfSignalsView({ embedded, etfItems, liveTicks, onVisibl
               title={g.hint}
             >
               <span className="etf-sig-card-label">{g.label}</span>
-              <span className="etf-sig-card-count">{rows.length}</span>
+              <span className="etf-sig-card-count">
+                {rows.length}
+                {rows.some((r) => r.holding) && (
+                  <span className="etf-sig-card-held" title="ETFs in this group that you hold">
+                    💼 {rows.filter((r) => r.holding).length}
+                  </span>
+                )}
+              </span>
               {dipCounts && (
                 <span className="etf-sig-card-sub">
                   <span title="Still above the dip target">⏳ {dipCounts.waiting || 0}</span>
@@ -260,6 +275,7 @@ export default function EtfSignalsView({ embedded, etfItems, liveTicks, onVisibl
               <tr>
                 {th('symbol', 'ETF')}
                 {th('section', 'Section')}
+                {th('held', 'Holding', ' num')}
                 {th('ltp', 'LTP', ' num')}
                 {th('day', 'Day', ' num')}
                 <th>Signal</th>
@@ -286,6 +302,17 @@ export default function EtfSignalsView({ embedded, etfItems, liveTicks, onVisibl
                         {r.name && <span className="etf-sig-name">{r.name}</span>}
                       </td>
                       <td className="etf-sig-section">{r.section}</td>
+                      <td className="num">
+                        {r.holding ? (
+                          <span
+                            className="etf-sig-held"
+                            title={`You hold ${r.holding.qty} @ avg ₹${fmtNum(r.holding.avg)} · value ₹${fmtNum(r.holding.qty * r.price, 0)}`}
+                          >
+                            💼 {r.holding.qty.toLocaleString('en-IN')}
+                            <span className={`etf-sig-pct ${signClass(r.holdPnlPct)}`}>{fmtPct(r.holdPnlPct, 1)}</span>
+                          </span>
+                        ) : <span className="etf-sig-muted">—</span>}
+                      </td>
                       <td className="num">{fmtNum(r.price)}</td>
                       <td className={`num ${signClass(r.dayPct)}`}>{fmtPct(r.dayPct)}</td>
                       <td><span className={`signal-tag signal-${r.view.tone}`}>{r.view.label.toUpperCase()}</span></td>
@@ -318,7 +345,7 @@ export default function EtfSignalsView({ embedded, etfItems, liveTicks, onVisibl
                     </tr>
                     {isOpen && (
                       <tr className="etf-sig-detail-row">
-                        <td colSpan={11}>
+                        <td colSpan={12}>
                           <EtfSignalDetail row={r} />
                         </td>
                       </tr>
